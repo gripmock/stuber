@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 
 	"github.com/google/uuid"
+	"golang.org/x/exp/maps"
 )
 
 var (
@@ -27,8 +28,8 @@ type storage struct {
 	lefts      map[string]uint64
 	rights     map[string]uint64
 	leftRights map[uint64][]uint64
-	values     map[uuid.UUID][]Value
-	valuesByID map[uuid.UUID]Value
+	items      map[uuid.UUID][]Value
+	itemsByID  map[uuid.UUID]Value
 }
 
 func newStorage() *storage {
@@ -36,9 +37,13 @@ func newStorage() *storage {
 		rights:     map[string]uint64{},
 		lefts:      map[string]uint64{},
 		leftRights: map[uint64][]uint64{},
-		values:     map[uuid.UUID][]Value{},
-		valuesByID: map[uuid.UUID]Value{},
+		items:      map[uuid.UUID][]Value{},
+		itemsByID:  map[uuid.UUID]Value{},
 	}
+}
+
+func (s *storage) values() []Value {
+	return maps.Values(s.itemsByID)
 }
 
 func (s *storage) findAll(left, right string) ([]Value, error) {
@@ -50,37 +55,42 @@ func (s *storage) findAll(left, right string) ([]Value, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	return s.values[pos], nil
+	return s.items[pos], nil
 }
 
 func (s *storage) findByID(key uuid.UUID) Value {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if v, ok := s.valuesByID[key]; ok {
+	if v, ok := s.itemsByID[key]; ok {
 		return v
 	}
 
 	return nil
 }
 
-func (s *storage) upsert(values ...Value) {
+func (s *storage) upsert(values ...Value) []uuid.UUID {
+	results := make([]uuid.UUID, 0, len(values))
+
 	for _, v := range values {
 		leftID := s.leftIdOrNew(v.Left())
 		rightID := s.rightIdOrNew(v.Right())
 		ind := s.pos(leftID, rightID)
 
 		s.mu.Lock()
+		results = append(results, v.Key())
 		s.leftRights[leftID] = append(s.leftRights[leftID], rightID)
-		s.values[ind] = append(s.values[ind], v)
-		s.valuesByID[v.Key()] = v
+		s.items[ind] = append(s.items[ind], v)
+		s.itemsByID[v.Key()] = v
 		s.mu.Unlock()
 	}
+
+	return results
 }
 
 func (s *storage) del(keys ...uuid.UUID) int {
 	result := 0
-	deleteIDs := make(map[uuid.UUID][]uuid.UUID, len(s.values))
+	deleteIDs := make(map[uuid.UUID][]uuid.UUID, len(s.items))
 
 	for _, key := range keys {
 		v := s.findByID(key)
@@ -101,13 +111,13 @@ func (s *storage) del(keys ...uuid.UUID) int {
 	defer s.mu.Unlock()
 
 	for pos, v := range deleteIDs {
-		s.values[pos] = slices.DeleteFunc(s.values[pos], func(value Value) bool {
+		s.items[pos] = slices.DeleteFunc(s.items[pos], func(value Value) bool {
 			return slices.Contains(v, value.Key())
 		})
 	}
 
 	for _, key := range keys {
-		delete(s.valuesByID, key)
+		delete(s.itemsByID, key)
 	}
 
 	return result
@@ -164,18 +174,18 @@ func (s *storage) rightIdOrNew(name string) uint64 {
 func (s *storage) posByN(left, right string) (uuid.UUID, error) {
 	leftID, err := s.leftId(left)
 	if err != nil {
-		return uuid.UUID{}, err
+		return uuid.Nil, err
 	}
 
 	rightID, err := s.rightId(right)
 	if err != nil {
-		return uuid.UUID{}, err
+		return uuid.Nil, err
 	}
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if !slices.Contains(s.leftRights[leftID], rightID) {
-		return uuid.UUID{}, ErrRightNotFound
+		return uuid.Nil, ErrRightNotFound
 	}
 
 	return s.pos(leftID, rightID), nil
@@ -191,13 +201,13 @@ func (s *storage) pos(left uint64, right uint64) uuid.UUID {
 		byte(left >> 16),
 		byte(left >> 8),
 		byte(left),
-		byte(right),
-		byte(right >> 8),
-		byte(right >> 16),
-		byte(right >> 24),
-		byte(right >> 32),
-		byte(right >> 40),
-		byte(right >> 48),
 		byte(right >> 56),
+		byte(right >> 48),
+		byte(right >> 40),
+		byte(right >> 32),
+		byte(right >> 24),
+		byte(right >> 16),
+		byte(right >> 8),
+		byte(right),
 	}
 }

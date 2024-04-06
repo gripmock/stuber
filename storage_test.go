@@ -80,8 +80,8 @@ func TestAdd(t *testing.T) {
 
 	require.Equal(t, uint64(5), s.leftTotal.Load())
 	require.Equal(t, uint64(3), s.rightTotal.Load())
-	require.Len(t, s.values, 5)
-	require.Len(t, s.valuesByID, 6)
+	require.Len(t, s.items, 5)
+	require.Len(t, s.itemsByID, 6)
 }
 
 func TestUpdate(t *testing.T) {
@@ -92,8 +92,8 @@ func TestUpdate(t *testing.T) {
 
 	require.Equal(t, uint64(1), s.leftTotal.Load())
 	require.Equal(t, uint64(1), s.rightTotal.Load())
-	require.Len(t, s.values, 1)
-	require.Len(t, s.valuesByID, 1)
+	require.Len(t, s.items, 1)
+	require.Len(t, s.itemsByID, 1)
 
 	v := s.findByID(id)
 	require.NotNil(t, v)
@@ -106,8 +106,8 @@ func TestUpdate(t *testing.T) {
 
 	require.Equal(t, uint64(1), s.leftTotal.Load())
 	require.Equal(t, uint64(1), s.rightTotal.Load())
-	require.Len(t, s.values, 1)
-	require.Len(t, s.valuesByID, 1)
+	require.Len(t, s.items, 1)
+	require.Len(t, s.itemsByID, 1)
 
 	v = s.findByID(id)
 	require.NotNil(t, v)
@@ -135,8 +135,8 @@ func TestFindByID(t *testing.T) {
 
 	require.Equal(t, uint64(5), s.leftTotal.Load())
 	require.Equal(t, uint64(3), s.rightTotal.Load())
-	require.Len(t, s.values, 6)
-	require.Len(t, s.valuesByID, 7)
+	require.Len(t, s.items, 6)
+	require.Len(t, s.itemsByID, 7)
 
 	val := s.findByID(id)
 	require.NotNil(t, val)
@@ -157,8 +157,8 @@ func TestFindAll(t *testing.T) {
 
 	require.Equal(t, uint64(5), s.leftTotal.Load())
 	require.Equal(t, uint64(3), s.rightTotal.Load())
-	require.Len(t, s.values, 6)
-	require.Len(t, s.valuesByID, 7)
+	require.Len(t, s.items, 6)
+	require.Len(t, s.itemsByID, 7)
 
 	g1s1, err := s.findAll("Greeter1", "SayHello1")
 	require.NoError(t, err)
@@ -190,20 +190,20 @@ func TestDelete(t *testing.T) {
 	require.Equal(t, 0, s.del())
 	require.Equal(t, uint64(3), s.leftTotal.Load())
 	require.Equal(t, uint64(3), s.rightTotal.Load())
-	require.Len(t, s.values, 3)
-	require.Len(t, s.valuesByID, 3)
+	require.Len(t, s.items, 3)
+	require.Len(t, s.itemsByID, 3)
 
 	require.Equal(t, 1, s.del(id1))
 	require.Equal(t, uint64(3), s.leftTotal.Load())
 	require.Equal(t, uint64(3), s.rightTotal.Load())
-	require.Len(t, s.values, 3)
-	require.Len(t, s.valuesByID, 2)
+	require.Len(t, s.items, 3)
+	require.Len(t, s.itemsByID, 2)
 
 	require.Equal(t, 2, s.del(id2, id3))
 	require.Equal(t, uint64(3), s.leftTotal.Load())
 	require.Equal(t, uint64(3), s.rightTotal.Load())
-	require.Len(t, s.values, 3)
-	require.Len(t, s.valuesByID, 0)
+	require.Len(t, s.items, 3)
+	require.Len(t, s.itemsByID, 0)
 }
 
 func TestPos(t *testing.T) {
@@ -213,9 +213,9 @@ func TestPos(t *testing.T) {
 		guid  uuid.UUID
 	}{
 		{0, 0, uuid.MustParse("00000000-0000-0000-0000-000000000000")},
-		{0, 1, uuid.MustParse("00000000-0000-0000-0100-000000000000")},
-		{0, 16, uuid.MustParse("00000000-0000-0000-1000-000000000000")},
-		{0, 17, uuid.MustParse("00000000-0000-0000-1100-000000000000")},
+		{0, 1, uuid.MustParse("00000000-0000-0000-0000-000000000001")},
+		{0, 16, uuid.MustParse("00000000-0000-0000-0000-000000000010")},
+		{0, 17, uuid.MustParse("00000000-0000-0000-0000-000000000011")},
 		{1, 0, uuid.MustParse("00000000-0000-0001-0000-000000000000")},
 		{16, 0, uuid.MustParse("00000000-0000-0010-0000-000000000000")},
 		{17, 0, uuid.MustParse("00000000-0000-0011-0000-000000000000")},
