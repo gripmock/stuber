@@ -2,8 +2,14 @@ package stuber
 
 import (
 	"errors"
-
+	"github.com/bavix/features"
 	"github.com/google/uuid"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
+)
+
+const (
+	MethodTitle features.Flag = iota
 )
 
 var (
@@ -12,17 +18,24 @@ var (
 )
 
 type Budgerigar struct {
-	storage *storage
+	storage  *storage
+	searcher *searcher
+	toggles  features.Toggles
 }
 
-func NewBudgerigar() *Budgerigar {
+func NewBudgerigar(toggles features.Toggles) *Budgerigar {
 	return &Budgerigar{
 		storage: newStorage(),
+		toggles: toggles,
 	}
 }
 
 func (b *Budgerigar) PutMany(values ...*Stub) []uuid.UUID {
 	return b.storage.upsert(b.castToValue(values)...)
+}
+
+func (b *Budgerigar) DeleteByID(ids ...uuid.UUID) int {
+	return b.storage.del(ids...)
 }
 
 func (b *Budgerigar) FindByID(id uuid.UUID) *Stub {
@@ -33,8 +46,15 @@ func (b *Budgerigar) FindByID(id uuid.UUID) *Stub {
 	return nil
 }
 
-func (b *Budgerigar) DeleteByID(ids ...uuid.UUID) int {
-	return b.storage.del(ids...)
+func (b *Budgerigar) FindBy(query Query) Result {
+	// backward compatibility
+	if b.toggles.Has(MethodTitle) {
+		query.Method = cases.
+			Title(language.English, cases.NoLower).
+			String(query.Method)
+	}
+
+	return b.searcher.Find(query)
 }
 
 func (b *Budgerigar) FindAll(service, method string) ([]*Stub, error) {

@@ -3,13 +3,14 @@ package stuber_test
 import (
 	"testing"
 
+	"github.com/bavix/features"
 	"github.com/google/uuid"
 	"github.com/gripmock/stuber"
 	"github.com/stretchr/testify/require"
 )
 
 func TestServiceNotFound(t *testing.T) {
-	s := stuber.NewBudgerigar()
+	s := stuber.NewBudgerigar(features.New())
 
 	_, err := s.FindAll("hello", "world")
 
@@ -17,7 +18,7 @@ func TestServiceNotFound(t *testing.T) {
 }
 
 func TestMethodNotFound(t *testing.T) {
-	s := stuber.NewBudgerigar()
+	s := stuber.NewBudgerigar(features.New())
 
 	s.PutMany(
 		&stuber.Stub{ID: uuid.New(), Service: "Greeter1", Method: "SayHello1"},
@@ -29,13 +30,13 @@ func TestMethodNotFound(t *testing.T) {
 }
 
 func TestStubNil(t *testing.T) {
-	s := stuber.NewBudgerigar()
+	s := stuber.NewBudgerigar(features.New())
 
 	require.Nil(t, s.FindByID(uuid.New()))
 }
 
 func TestFindAll(t *testing.T) {
-	s := stuber.NewBudgerigar()
+	s := stuber.NewBudgerigar(features.New())
 
 	require.Len(t, s.All(), 0)
 
@@ -53,7 +54,7 @@ func TestFindAll(t *testing.T) {
 }
 
 func TestRelationship(t *testing.T) {
-	s := stuber.NewBudgerigar()
+	s := stuber.NewBudgerigar(features.New())
 
 	s.PutMany(
 		&stuber.Stub{ID: uuid.New(), Service: "Greeter1", Method: "SayHello1"},
@@ -67,13 +68,15 @@ func TestRelationship(t *testing.T) {
 func TestDelete(t *testing.T) {
 	id1, id2, id3 := uuid.New(), uuid.New(), uuid.New()
 
-	s := stuber.NewBudgerigar()
+	s := stuber.NewBudgerigar(features.New())
 
 	s.PutMany(
 		&stuber.Stub{ID: id1, Service: "Greeter1", Method: "SayHello1"},
 		&stuber.Stub{ID: id2, Service: "Greeter2", Method: "SayHello2"},
 		&stuber.Stub{ID: id3, Service: "Greeter3", Method: "SayHello3"},
 	)
+
+	require.NotNil(t, s.FindByID(id1))
 
 	all, err := s.FindAll("Greeter1", "SayHello1")
 	require.NoError(t, err)
