@@ -69,6 +69,21 @@ func (s *storage) findByID(key uuid.UUID) Value {
 	return nil
 }
 
+func (s *storage) findByIDs(keys ...uuid.UUID) []Value {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	results := make([]Value, 0, len(keys))
+
+	for _, key := range keys {
+		if v, ok := s.itemsByID[key]; ok {
+			results = append(results, v)
+		}
+	}
+
+	return results
+}
+
 func (s *storage) upsert(values ...Value) []uuid.UUID {
 	results := make([]uuid.UUID, 0, len(values))
 

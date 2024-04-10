@@ -12,7 +12,7 @@ import (
 func TestServiceNotFound(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New())
 
-	_, err := s.FindAll("hello", "world")
+	_, err := s.FindBy("hello", "world")
 
 	require.ErrorIs(t, err, stuber.ErrServiceNotFound)
 }
@@ -24,7 +24,7 @@ func TestMethodNotFound(t *testing.T) {
 		&stuber.Stub{ID: uuid.New(), Service: "Greeter1", Method: "SayHello1"},
 	)
 
-	_, err := s.FindAll("Greeter1", "world")
+	_, err := s.FindBy("Greeter1", "world")
 
 	require.ErrorIs(t, err, stuber.ErrMethodNotFound)
 }
@@ -35,7 +35,7 @@ func TestStubNil(t *testing.T) {
 	require.Nil(t, s.FindByID(uuid.New()))
 }
 
-func TestFindAll(t *testing.T) {
+func TestFindBy(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New())
 
 	require.Len(t, s.All(), 0)
@@ -61,7 +61,7 @@ func TestRelationship(t *testing.T) {
 		&stuber.Stub{ID: uuid.New(), Service: "Greeter2", Method: "SayHello2"},
 	)
 
-	_, err := s.FindAll("Greeter1", "SayHello2")
+	_, err := s.FindBy("Greeter1", "SayHello2")
 	require.ErrorIs(t, err, stuber.ErrMethodNotFound)
 }
 
@@ -78,15 +78,15 @@ func TestDelete(t *testing.T) {
 
 	require.NotNil(t, s.FindByID(id1))
 
-	all, err := s.FindAll("Greeter1", "SayHello1")
+	all, err := s.FindBy("Greeter1", "SayHello1")
 	require.NoError(t, err)
 	require.Len(t, all, 1)
 
-	all, err = s.FindAll("Greeter2", "SayHello2")
+	all, err = s.FindBy("Greeter2", "SayHello2")
 	require.NoError(t, err)
 	require.Len(t, all, 1)
 
-	all, err = s.FindAll("Greeter3", "SayHello3")
+	all, err = s.FindBy("Greeter3", "SayHello3")
 	require.NoError(t, err)
 	require.Len(t, all, 1)
 
@@ -102,15 +102,15 @@ func TestDelete(t *testing.T) {
 	require.Nil(t, s.FindByID(id2))
 	require.Nil(t, s.FindByID(id3))
 
-	all, err = s.FindAll("Greeter1", "SayHello1")
+	all, err = s.FindBy("Greeter1", "SayHello1")
 	require.NoError(t, err)
 	require.Len(t, all, 0)
 
-	all, err = s.FindAll("Greeter2", "SayHello2")
+	all, err = s.FindBy("Greeter2", "SayHello2")
 	require.NoError(t, err)
 	require.Len(t, all, 0)
 
-	all, err = s.FindAll("Greeter3", "SayHello3")
+	all, err = s.FindBy("Greeter3", "SayHello3")
 	require.NoError(t, err)
 	require.Len(t, all, 0)
 }

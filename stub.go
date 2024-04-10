@@ -63,6 +63,10 @@ func (i InputHeader) GetMatches() map[string]interface{} {
 	return i.Matches
 }
 
+func (i InputHeader) Len() int {
+	return len(i.Equals) + len(i.Matches) + len(i.Contains)
+}
+
 type Output struct {
 	Headers map[string]string      `json:"headers"`
 	Data    map[string]interface{} `json:"data"`
