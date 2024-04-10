@@ -3,12 +3,12 @@ module github.com/gripmock/stuber
 go 1.22
 
 require (
-	github.com/bavix/features v0.0.0-20240407121822-4d4e0e8980ff
+	github.com/bavix/features v1.0.0
 	github.com/google/uuid v1.6.0
 	github.com/stretchr/testify v1.9.0
-	golang.org/x/exp v0.0.0-20240404231335-c0f41cb1a7a0
+	golang.org/x/exp v0.0.0-20240409090435-93d18d7e34b8
 	golang.org/x/text v0.14.0
-	google.golang.org/grpc v1.63.0
+	google.golang.org/grpc v1.63.2
 )
 
 require (
