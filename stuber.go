@@ -61,3 +61,7 @@ func (b *Budgerigar) Used() []*Stub {
 func (b *Budgerigar) Unused() []*Stub {
 	return b.searcher.unused()
 }
+
+func (b *Budgerigar) Clear() {
+	b.searcher.clear()
+}

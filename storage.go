@@ -42,6 +42,19 @@ func newStorage() *storage {
 	}
 }
 
+func (s *storage) clear() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.leftTotal = atomic.Uint64{}
+	s.rightTotal = atomic.Uint64{}
+	s.lefts = map[string]uint64{}
+	s.rights = make(map[string]uint64)
+	s.leftRights = map[uint64][]uint64{}
+	s.items = map[uuid.UUID][]Value{}
+	s.itemsByID = map[uuid.UUID]Value{}
+}
+
 func (s *storage) values() []Value {
 	return maps.Values(s.itemsByID)
 }
