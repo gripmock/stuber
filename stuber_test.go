@@ -120,6 +120,120 @@ func TestBudgerigar_Unused(t *testing.T) {
 	require.Equal(t, map[string]interface{}{"message": "hello world"}, r.Found().Output.Data)
 }
 
+func TestBudgerigar_SearchWithHeaders(t *testing.T) {
+	s := stuber.NewBudgerigar(features.New(stuber.MethodTitle))
+
+	require.Len(t, s.Unused(), 0)
+
+	s.PutMany(
+		&stuber.Stub{
+			ID:      uuid.New(),
+			Service: "Gripmock",
+			Method:  "SayHello",
+			Input: stuber.InputData{Equals: map[string]interface{}{
+				"name": "simple3",
+			}},
+			Output: stuber.Output{Data: map[string]interface{}{
+				"message":     "Hello Simple3",
+				"return_code": 3,
+			}},
+		},
+		&stuber.Stub{
+			ID:      uuid.New(),
+			Service: "Gripmock",
+			Method:  "SayHello",
+			Headers: stuber.InputHeader{Equals: map[string]interface{}{
+				"authorization": "Basic dXNlcjp1c2Vy",
+			}},
+			Input: stuber.InputData{Equals: map[string]interface{}{
+				"name": "simple3",
+			}},
+			Output: stuber.Output{Data: map[string]interface{}{
+				"message":     "Hello Simple3",
+				"return_code": 3,
+			}},
+		},
+	)
+
+	require.Len(t, s.Unused(), 2)
+
+	payload := `{"service":"Gripmock","method":"SayHello",
+		"headers": {"authorization": "Basic dXNlcjp1c2Vy"}, 
+		"data":{"name":"simple3"}}`
+
+	req := httptest.NewRequest(http.MethodPost, "/api/stubs/search", bytes.NewReader([]byte(payload)))
+	q, err := stuber.NewQuery(req)
+	require.NoError(t, err)
+
+	r, err := s.FindByQuery(q)
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	require.NotNil(t, r.Found())
+	require.Nil(t, r.Similar())
+
+	require.Equal(t, map[string]interface{}{
+		"message":     "Hello Simple3",
+		"return_code": 3,
+	}, r.Found().Output.Data)
+}
+
+func TestBudgerigar_SearchWithHeaders_Similar(t *testing.T) {
+	s := stuber.NewBudgerigar(features.New(stuber.MethodTitle))
+
+	require.Len(t, s.Unused(), 0)
+
+	s.PutMany(
+		&stuber.Stub{
+			ID:      uuid.New(),
+			Service: "Gripmock",
+			Method:  "SayHello",
+			Input: stuber.InputData{Equals: map[string]interface{}{
+				"name": "simple3",
+			}},
+			Output: stuber.Output{Data: map[string]interface{}{
+				"message":     "Hello Simple3",
+				"return_code": 3,
+			}},
+		},
+		&stuber.Stub{
+			ID:      uuid.New(),
+			Service: "Gripmock",
+			Method:  "SayHello",
+			Headers: stuber.InputHeader{Equals: map[string]interface{}{
+				"authorization": "Basic dXNlcjp1c2Vy",
+			}},
+			Input: stuber.InputData{Equals: map[string]interface{}{
+				"name": "simple3",
+			}},
+			Output: stuber.Output{Data: map[string]interface{}{
+				"message":     "Hello Simple3",
+				"return_code": 3,
+			}},
+		},
+	)
+
+	require.Len(t, s.Unused(), 2)
+
+	payload := `{"service":"Gripmock","method":"SayHello",
+		"headers": {"authorization": "Basic dXNlcjp1c2Vy"}, 
+		"data":{"name":"simple2"}}`
+
+	req := httptest.NewRequest(http.MethodPost, "/api/stubs/search", bytes.NewReader([]byte(payload)))
+	q, err := stuber.NewQuery(req)
+	require.NoError(t, err)
+
+	r, err := s.FindByQuery(q)
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	require.NotNil(t, r.Similar())
+	require.Nil(t, r.Found())
+
+	require.Equal(t, map[string]interface{}{
+		"message":     "Hello Simple3",
+		"return_code": 3,
+	}, r.Similar().Output.Data)
+}
+
 func TestResult_Similar(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New(stuber.MethodTitle))
 
