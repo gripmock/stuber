@@ -4,6 +4,7 @@ import (
 	"errors"
 	"golang.org/x/exp/maps"
 	"slices"
+	"sync"
 
 	"github.com/google/uuid"
 )
@@ -15,8 +16,10 @@ var (
 )
 
 type searcher struct {
+	mu       sync.RWMutex
 	stubUsed map[uuid.UUID]struct{}
-	storage  *storage
+
+	storage *storage
 }
 
 func newSearcher() *searcher {
@@ -64,15 +67,29 @@ func (s *searcher) findBy(service, method string) ([]*Stub, error) {
 	return s.castToStub(all), nil
 }
 
+func (s *searcher) clear() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.stubUsed = make(map[uuid.UUID]struct{})
+	s.storage.clear()
+}
+
 func (s *searcher) all() []*Stub {
 	return s.castToStub(s.storage.values())
 }
 
 func (s *searcher) used() []*Stub {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	return s.castToStub(s.storage.findByIDs(maps.Keys(s.stubUsed)...))
 }
 
 func (s *searcher) unused() []*Stub {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	results := make([]*Stub, 0, len(s.all()))
 	for _, stub := range s.all() {
 		if _, ok := s.stubUsed[stub.ID]; !ok {
@@ -98,6 +115,9 @@ func (s *searcher) searchByID(service, method string, id uuid.UUID) (*Result, er
 	}
 
 	if found := s.findByID(id); found != nil {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
 		s.stubUsed[id] = struct{}{}
 
 		return &Result{found: found}, nil
@@ -123,7 +143,9 @@ func (s *searcher) search(query Query) (*Result, error) {
 
 	for _, stub := range stubs {
 		if match(query, stub) {
+			s.mu.Lock()
 			s.stubUsed[stub.ID] = struct{}{}
+			s.mu.Unlock()
 
 			return &Result{found: stub}, nil
 		}
