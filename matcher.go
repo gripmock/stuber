@@ -5,17 +5,12 @@ import (
 )
 
 func match(query Query, stub *Stub) bool {
-	result := equals(stub.Input.Equals, query.Data, stub.Input.IgnoreArrayOrder) &&
+	return equals(stub.Input.Equals, query.Data, stub.Input.IgnoreArrayOrder) &&
 		contains(stub.Input.Contains, query.Data, stub.Input.IgnoreArrayOrder) &&
-		matches(stub.Input.Matches, query.Data, stub.Input.IgnoreArrayOrder)
-
-	if stub.Headers.Len() > 0 {
-		return result && equals(stub.Headers.Equals, query.Data, false) &&
-			contains(stub.Headers.Contains, query.Data, false) &&
-			matches(stub.Headers.Matches, query.Data, false)
-	}
-
-	return result
+		matches(stub.Input.Matches, query.Data, stub.Input.IgnoreArrayOrder) &&
+		equals(stub.Headers.Equals, query.Data, false) &&
+		contains(stub.Headers.Contains, query.Data, false) &&
+		matches(stub.Headers.Matches, query.Data, false)
 }
 
 func rankMatch(query Query, stub *Stub) float64 {
