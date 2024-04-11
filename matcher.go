@@ -36,26 +36,18 @@ func equals(expected map[string]any, actual any, orderIgnore bool) bool {
 	return deeply.Equals(expected, actual)
 }
 
-func contains(expected map[string]any, actual any, orderIgnore bool) bool {
+func contains(expected map[string]any, actual any, _ bool) bool {
 	if expected == nil || len(expected) == 0 {
 		return true
 	}
 
-	if orderIgnore {
-		return deeply.ContainsIgnoreArrayOrder(expected, actual)
-	}
-
-	return deeply.Contains(expected, actual)
+	return deeply.ContainsIgnoreArrayOrder(expected, actual)
 }
 
-func matches(expected map[string]any, actual any, orderIgnore bool) bool {
+func matches(expected map[string]any, actual any, _ bool) bool {
 	if expected == nil || len(expected) == 0 {
 		return true
 	}
 
-	if orderIgnore {
-		return deeply.MatchesIgnoreArrayOrder(expected, actual)
-	}
-
-	return deeply.Matches(expected, actual)
+	return deeply.MatchesIgnoreArrayOrder(expected, actual)
 }
