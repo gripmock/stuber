@@ -102,23 +102,20 @@ func (s *searcher) unused() []*Stub {
 
 func (s *searcher) find(query Query) (*Result, error) {
 	if query.ID != nil {
-		return s.searchByID(query.Service, query.Method, *query.ID)
+		return s.searchByID(query.Service, query.Method, query)
 	}
 
 	return s.search(query)
 }
 
-func (s *searcher) searchByID(service, method string, id uuid.UUID) (*Result, error) {
+func (s *searcher) searchByID(service, method string, query Query) (*Result, error) {
 	_, err := s.storage.posByN(service, method)
 	if err != nil {
 		return nil, s.wrap(err)
 	}
 
-	if found := s.findByID(id); found != nil {
-		s.mu.Lock()
-		defer s.mu.Unlock()
-
-		s.stubUsed[id] = struct{}{}
+	if found := s.findByID(*query.ID); found != nil {
+		s.mark(query, *query.ID)
 
 		return &Result{found: found}, nil
 	}
@@ -136,20 +133,20 @@ func (s *searcher) search(query Query) (*Result, error) {
 		return a.Headers.Len() - a.Headers.Len()
 	})
 
+	for _, stub := range stubs {
+		if match(query, stub) {
+			s.mark(query, stub.ID)
+
+			return &Result{found: stub}, nil
+		}
+	}
+
 	var (
 		similar *Stub   = nil
 		rank    float64 = 0
 	)
 
 	for _, stub := range stubs {
-		if match(query, stub) {
-			s.mu.Lock()
-			s.stubUsed[stub.ID] = struct{}{}
-			s.mu.Unlock()
-
-			return &Result{found: stub}, nil
-		}
-
 		if current := rankMatch(query, stub); current > rank {
 			similar = stub
 			rank = current
@@ -161,6 +158,17 @@ func (s *searcher) search(query Query) (*Result, error) {
 	}
 
 	return &Result{found: nil, similar: similar}, nil
+}
+
+func (s *searcher) mark(query Query, id uuid.UUID) {
+	if query.RequestInternal() {
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.stubUsed[id] = struct{}{}
 }
 
 func (s *searcher) castToValue(values []*Stub) []Value {
