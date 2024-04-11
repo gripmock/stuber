@@ -53,3 +53,11 @@ func (b *Budgerigar) FindBy(service, method string) ([]*Stub, error) {
 func (b *Budgerigar) All() []*Stub {
 	return b.searcher.all()
 }
+
+func (b *Budgerigar) Used() []*Stub {
+	return b.searcher.used()
+}
+
+func (b *Budgerigar) Unused() []*Stub {
+	return b.searcher.unused()
+}
