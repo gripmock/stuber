@@ -28,6 +28,14 @@ type Result struct {
 	similar *Stub
 }
 
+func (r *Result) Found() *Stub {
+	return r.found
+}
+
+func (r *Result) Similar() *Stub {
+	return r.similar
+}
+
 func (s *searcher) upsert(values ...*Stub) []uuid.UUID {
 	return s.storage.upsert(s.castToValue(values)...)
 }
