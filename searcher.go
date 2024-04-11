@@ -20,7 +20,10 @@ type searcher struct {
 }
 
 func newSearcher() *searcher {
-	return &searcher{storage: newStorage()}
+	return &searcher{
+		storage:  newStorage(),
+		stubUsed: make(map[uuid.UUID]struct{}),
+	}
 }
 
 type Result struct {
