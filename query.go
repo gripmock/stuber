@@ -32,16 +32,16 @@ func toggles(r *http.Request) features.Toggles {
 	return features.New(flags...)
 }
 
-func NewQuery(r *http.Request) (*Query, error) {
-	q := &Query{
+func NewQuery(r *http.Request) (Query, error) {
+	q := Query{
 		toggles: toggles(r),
 	}
 
 	decoder := json.NewDecoder(r.Body)
 	decoder.UseNumber()
 
-	if err := decoder.Decode(q); err != nil {
-		return nil, err
+	if err := decoder.Decode(&q); err != nil {
+		return q, err
 	}
 
 	return q, nil
