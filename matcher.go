@@ -1,6 +1,8 @@
 package stuber
 
-import "github.com/gripmock/deeply"
+import (
+	"github.com/gripmock/deeply"
+)
 
 func match(query Query, stub *Stub) bool {
 	result := equals(stub.Input.Equals, query.Data, stub.Input.IgnoreArrayOrder) &&
@@ -22,8 +24,8 @@ func rankMatch(query Query, stub *Stub) float64 {
 		deeply.RankMatch(stub.Input.Matches, query.Data)
 }
 
-func equals(expected, actual any, orderIgnore bool) bool {
-	if expected == nil {
+func equals(expected map[string]any, actual any, orderIgnore bool) bool {
+	if expected == nil || len(expected) == 0 {
 		return true
 	}
 
@@ -34,8 +36,8 @@ func equals(expected, actual any, orderIgnore bool) bool {
 	return deeply.Equals(expected, actual)
 }
 
-func contains(expected, actual any, orderIgnore bool) bool {
-	if expected == nil {
+func contains(expected map[string]any, actual any, orderIgnore bool) bool {
+	if expected == nil || len(expected) == 0 {
 		return true
 	}
 
@@ -46,8 +48,8 @@ func contains(expected, actual any, orderIgnore bool) bool {
 	return deeply.Contains(expected, actual)
 }
 
-func matches(expected, actual any, orderIgnore bool) bool {
-	if expected == nil {
+func matches(expected map[string]any, actual any, orderIgnore bool) bool {
+	if expected == nil || len(expected) == 0 {
 		return true
 	}
 

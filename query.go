@@ -46,3 +46,7 @@ func NewQuery(r *http.Request) (Query, error) {
 
 	return q, nil
 }
+
+func (q Query) RequestInternal() bool {
+	return q.toggles.Has(RequestInternalFlag)
+}
