@@ -129,8 +129,8 @@ func (s *searcher) search(query Query) (*Result, error) {
 		return nil, s.wrap(err)
 	}
 
-	slices.SortFunc(stubs, func(a, b *Stub) int {
-		return a.Headers.Len() - a.Headers.Len()
+	slices.SortStableFunc(stubs, func(a, b *Stub) int {
+		return b.Headers.Len() - a.Headers.Len()
 	})
 
 	for _, stub := range stubs {
