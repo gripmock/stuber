@@ -134,8 +134,7 @@ func TestBudgerigar_SearchWithHeaders(t *testing.T) {
 				"name": "simple3",
 			}},
 			Output: stuber.Output{Data: map[string]interface{}{
-				"message":     "Hello Simple3",
-				"return_code": 3,
+				"message": "Hello Simple3",
 			}},
 		},
 		&stuber.Stub{
