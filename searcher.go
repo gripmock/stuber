@@ -2,11 +2,10 @@ package stuber
 
 import (
 	"errors"
-	"golang.org/x/exp/maps"
-	"slices"
 	"sync"
 
 	"github.com/google/uuid"
+	"golang.org/x/exp/maps"
 )
 
 var (
@@ -128,10 +127,6 @@ func (s *searcher) search(query Query) (*Result, error) {
 	if err != nil {
 		return nil, s.wrap(err)
 	}
-
-	slices.SortStableFunc(stubs, func(a, b *Stub) int {
-		return b.Headers.Len() - a.Headers.Len()
-	})
 
 	var (
 		found       *Stub   = nil
