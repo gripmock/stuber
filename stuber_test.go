@@ -176,6 +176,44 @@ func TestBudgerigar_SearchWithHeaders(t *testing.T) {
 	}, r.Found().Output.Data)
 }
 
+func TestBudgerigar_SearchEmpty(t *testing.T) {
+	s := stuber.NewBudgerigar(features.New(stuber.MethodTitle))
+
+	require.Len(t, s.Unused(), 0)
+
+	s.PutMany(
+		&stuber.Stub{
+			ID:      uuid.New(),
+			Service: "Gripmock",
+			Method:  "ApiInfo",
+			Input:   stuber.InputData{Equals: map[string]interface{}{}},
+			Output: stuber.Output{Data: map[string]interface{}{
+				"name":    "Gripmock",
+				"version": "1.0",
+			}},
+		},
+	)
+
+	require.Len(t, s.Unused(), 1)
+
+	payload := `{"data":{},"method":"ApiInfo","service":"Gripmock"}`
+
+	req := httptest.NewRequest(http.MethodPost, "/api/stubs/search", bytes.NewReader([]byte(payload)))
+	q, err := stuber.NewQuery(req)
+	require.NoError(t, err)
+
+	r, err := s.FindByQuery(q)
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	require.NotNil(t, r.Found())
+	require.Nil(t, r.Similar())
+
+	require.Equal(t, map[string]interface{}{
+		"name":    "Gripmock",
+		"version": "1.0",
+	}, r.Found().Output.Data)
+}
+
 func TestBudgerigar_SearchWithHeaders_Similar(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New(stuber.MethodTitle))
 
