@@ -133,24 +133,30 @@ func (s *searcher) search(query Query) (*Result, error) {
 		return b.Headers.Len() - a.Headers.Len()
 	})
 
-	for _, stub := range stubs {
-		if match(query, stub) {
-			s.mark(query, stub.ID)
-
-			return &Result{found: stub}, nil
-		}
-	}
-
 	var (
-		similar *Stub   = nil
-		rank    float64 = 0
+		found       *Stub   = nil
+		foundRank   float64 = 0
+		similar     *Stub   = nil
+		similarRank float64 = 0
 	)
 
 	for _, stub := range stubs {
-		if current := rankMatch(query, stub); current > rank {
+		current := rankMatch(query, stub)
+		if current > similarRank {
 			similar = stub
-			rank = current
+			similarRank = current
 		}
+
+		if match(query, stub) && current > foundRank {
+			found = stub
+			foundRank = current
+		}
+	}
+
+	if found != nil {
+		s.mark(query, found.ID)
+
+		return &Result{found: found}, nil
 	}
 
 	if similar == nil {
