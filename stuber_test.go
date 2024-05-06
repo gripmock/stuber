@@ -56,6 +56,39 @@ func TestFindBy(t *testing.T) {
 	require.Len(t, s.All(), 7)
 }
 
+func TestPutMany_FixID(t *testing.T) {
+	s := stuber.NewBudgerigar(features.New())
+
+	require.Len(t, s.All(), 0)
+
+	stubs := []*stuber.Stub{
+		{Service: "Greeter1", Method: "SayHello1"},
+		{Service: "Greeter1", Method: "SayHello1"},
+	}
+
+	s.PutMany(stubs...)
+
+	require.Len(t, s.All(), 2)
+	require.NotNil(t, uuid.Nil, stubs[0].Key())
+	require.NotNil(t, uuid.Nil, stubs[1].Key())
+}
+
+func TestUpdateMany(t *testing.T) {
+	s := stuber.NewBudgerigar(features.New())
+
+	require.Len(t, s.All(), 0)
+
+	stubs := []*stuber.Stub{
+		{Service: "Greeter1", Method: "SayHello1", ID: uuid.New()},
+		{Service: "Greeter1", Method: "SayHello1"},
+		{Service: "Greeter1", Method: "SayHello1"},
+	}
+
+	s.UpdateMany(stubs...)
+
+	require.Len(t, s.All(), 1)
+}
+
 func TestRelationship(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New())
 

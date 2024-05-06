@@ -24,7 +24,25 @@ func NewBudgerigar(toggles features.Toggles) *Budgerigar {
 }
 
 func (b *Budgerigar) PutMany(values ...*Stub) []uuid.UUID {
+	for _, value := range values {
+		if value.Key() == uuid.Nil {
+			value.ID = uuid.New()
+		}
+	}
+
 	return b.searcher.upsert(values...)
+}
+
+func (b *Budgerigar) UpdateMany(values ...*Stub) []uuid.UUID {
+	updates := make([]*Stub, 0, len(values))
+
+	for _, value := range values {
+		if value.Key() != uuid.Nil {
+			updates = append(updates, value)
+		}
+	}
+
+	return b.searcher.upsert(updates...)
 }
 
 func (b *Budgerigar) DeleteByID(ids ...uuid.UUID) int {
