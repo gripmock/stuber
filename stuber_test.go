@@ -69,8 +69,8 @@ func TestPutMany_FixID(t *testing.T) {
 	s.PutMany(stubs...)
 
 	require.Len(t, s.All(), 2)
-	require.NotNil(t, uuid.Nil, stubs[0].Key())
-	require.NotNil(t, uuid.Nil, stubs[1].Key())
+	require.NotSame(t, uuid.Nil, stubs[0].Key())
+	require.NotSame(t, uuid.Nil, stubs[1].Key())
 }
 
 func TestUpdateMany(t *testing.T) {
