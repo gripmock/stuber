@@ -25,7 +25,7 @@ type Query struct {
 func toggles(r *http.Request) features.Toggles {
 	var flags []features.Flag
 
-	if len(r.Header.Values("X-GripMock-RequestInternal")) > 0 {
+	if len(r.Header.Values("X-Gripmock-Requestinternal")) > 0 {
 		flags = append(flags, RequestInternalFlag)
 	}
 

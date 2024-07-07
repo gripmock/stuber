@@ -8,8 +8,9 @@ import (
 
 	"github.com/bavix/features"
 	"github.com/google/uuid"
-	"github.com/gripmock/stuber"
 	"github.com/stretchr/testify/require"
+
+	"github.com/gripmock/stuber"
 )
 
 func TestServiceNotFound(t *testing.T) {
@@ -41,7 +42,7 @@ func TestStubNil(t *testing.T) {
 func TestFindBy(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New())
 
-	require.Len(t, s.All(), 0)
+	require.Empty(t, s.All())
 
 	s.PutMany(
 		&stuber.Stub{ID: uuid.New(), Service: "Greeter1", Method: "SayHello1"},
@@ -59,7 +60,7 @@ func TestFindBy(t *testing.T) {
 func TestPutMany_FixID(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New())
 
-	require.Len(t, s.All(), 0)
+	require.Empty(t, s.All())
 
 	stubs := []*stuber.Stub{
 		{Service: "Greeter1", Method: "SayHello1"},
@@ -76,7 +77,7 @@ func TestPutMany_FixID(t *testing.T) {
 func TestUpdateMany(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New())
 
-	require.Len(t, s.All(), 0)
+	require.Empty(t, s.All())
 
 	stubs := []*stuber.Stub{
 		{Service: "Greeter1", Method: "SayHello1", ID: uuid.New()},
@@ -104,7 +105,7 @@ func TestRelationship(t *testing.T) {
 func TestBudgerigar_Unused(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New(stuber.MethodTitle))
 
-	require.Len(t, s.Unused(), 0)
+	require.Empty(t, s.Unused())
 
 	s.PutMany(
 		&stuber.Stub{
@@ -156,7 +157,7 @@ func TestBudgerigar_Unused(t *testing.T) {
 func TestBudgerigar_SearchWithHeaders(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New(stuber.MethodTitle))
 
-	require.Len(t, s.Unused(), 0)
+	require.Empty(t, s.Unused())
 
 	s.PutMany(
 		&stuber.Stub{
@@ -212,7 +213,7 @@ func TestBudgerigar_SearchWithHeaders(t *testing.T) {
 func TestBudgerigar_SearchEmpty(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New(stuber.MethodTitle))
 
-	require.Len(t, s.Unused(), 0)
+	require.Empty(t, s.Unused())
 
 	s.PutMany(
 		&stuber.Stub{
@@ -250,7 +251,7 @@ func TestBudgerigar_SearchEmpty(t *testing.T) {
 func TestBudgerigar_SearchWithHeaders_Similar(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New(stuber.MethodTitle))
 
-	require.Len(t, s.Unused(), 0)
+	require.Empty(t, s.Unused())
 
 	s.PutMany(
 		&stuber.Stub{
@@ -367,19 +368,46 @@ func TestDelete(t *testing.T) {
 	require.Nil(t, s.FindByID(id1))
 
 	require.Equal(t, 2, s.DeleteByID(id2, id3))
-	require.Len(t, s.All(), 0)
+	require.Empty(t, s.All())
 	require.Nil(t, s.FindByID(id2))
 	require.Nil(t, s.FindByID(id3))
 
 	all, err = s.FindBy("Greeter1", "SayHello1")
 	require.NoError(t, err)
-	require.Len(t, all, 0)
+	require.Empty(t, all)
 
 	all, err = s.FindBy("Greeter2", "SayHello2")
 	require.NoError(t, err)
-	require.Len(t, all, 0)
+	require.Empty(t, all)
 
 	all, err = s.FindBy("Greeter3", "SayHello3")
 	require.NoError(t, err)
-	require.Len(t, all, 0)
+	require.Empty(t, all)
+}
+
+func TestBudgerigar_Clear(t *testing.T) {
+	s := stuber.NewBudgerigar(features.New(stuber.MethodTitle))
+
+	s.PutMany(
+		&stuber.Stub{
+			ID:      uuid.New(),
+			Service: "Service1",
+			Method:  "Method1",
+			Input:   stuber.InputData{Equals: map[string]interface{}{}},
+			Output:  stuber.Output{Data: map[string]interface{}{}},
+		},
+		&stuber.Stub{
+			ID:      uuid.New(),
+			Service: "Service2",
+			Method:  "Method2",
+			Input:   stuber.InputData{Equals: map[string]interface{}{}},
+			Output:  stuber.Output{Data: map[string]interface{}{}},
+		},
+	)
+
+	require.Len(t, s.All(), 2)
+
+	s.Clear()
+
+	require.Empty(t, s.All())
 }

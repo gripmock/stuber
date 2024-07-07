@@ -1,0 +1,40 @@
+run:
+  timeout: 1m
+  build-tags:
+    - wireinject
+linters:
+  enable-all: true
+  disable:
+    # turn on later
+    - godox
+    # deprecated
+    - gomnd
+    - execinquery
+    # not relevant
+    - varnamelen
+    - wrapcheck
+    - paralleltest
+    - exhaustruct
+linters-settings:
+  lll:
+    line-length: 140
+  gci:
+    sections:
+      - Standard
+      - Default
+      - Prefix(github.com/gripmock)
+  depguard:
+    rules:
+      main:
+        allow:
+          - $gostd
+          - github.com
+issues:
+  exclude-files:
+    - pkg/dependencies/builder.go
+  exclude-dirs:
+    - example
+  exclude-rules:
+    - path: (.+)_test.go
+      linters:
+        - dupl
