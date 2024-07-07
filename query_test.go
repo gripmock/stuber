@@ -16,7 +16,7 @@ func TestQuery_NewInternal(t *testing.T) {
 	payload := `{"service":"Testing","method":"TestMethod","data":{"Hola":"Mundo"}}`
 
 	req := httptest.NewRequest(http.MethodPost, "/api/stubs/search", bytes.NewReader([]byte(payload)))
-	req.Header.Add(strings.ToUpper("X-GripMock-RequestInternal"), "ok") //enable
+	req.Header.Add(strings.ToUpper("X-GripMock-RequestInternal"), "ok")
 
 	q, err := stuber.NewQuery(req)
 	require.NoError(t, err)

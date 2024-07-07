@@ -1,4 +1,4 @@
-package stuber
+package stuber //nolint:testpackage
 
 import (
 	"testing"
@@ -28,20 +28,20 @@ func (t testItem) Right() string {
 func TestLeft(t *testing.T) {
 	i := newStorage()
 
-	id := i.leftIdOrNew("Greeter")
+	id := i.leftIDOrNew("Greeter")
 	require.Equal(t, uint64(1), id)
 
-	id = i.leftIdOrNew("Greeter2")
+	id = i.leftIDOrNew("Greeter2")
 	require.Equal(t, uint64(2), id)
 
-	id, err := i.leftId("Greeter2")
+	id, err := i.leftID("Greeter2")
 	require.NoError(t, err)
 	require.Equal(t, uint64(2), id)
 
-	id = i.leftIdOrNew("Greeter2")
+	id = i.leftIDOrNew("Greeter2")
 	require.Equal(t, uint64(2), id)
 
-	id, err = i.leftId("Greeter3")
+	id, err = i.leftID("Greeter3")
 	require.ErrorIs(t, ErrLeftNotFound, err)
 	require.Equal(t, uint64(0), id)
 }
@@ -49,20 +49,20 @@ func TestLeft(t *testing.T) {
 func TestRight(t *testing.T) {
 	i := newStorage()
 
-	id := i.rightIdOrNew("SayHello")
+	id := i.rightIDOrNew("SayHello")
 	require.Equal(t, uint64(1), id)
 
-	id = i.rightIdOrNew("SayHello2")
+	id = i.rightIDOrNew("SayHello2")
 	require.Equal(t, uint64(2), id)
 
-	id, err := i.rightId("SayHello2")
+	id, err := i.rightID("SayHello2")
 	require.NoError(t, err)
 	require.Equal(t, uint64(2), id)
 
-	id = i.rightIdOrNew("SayHello2")
+	id = i.rightIDOrNew("SayHello2")
 	require.Equal(t, uint64(2), id)
 
-	id, err = i.rightId("SayHello3")
+	id, err = i.rightID("SayHello3")
 	require.ErrorIs(t, ErrRightNotFound, err)
 	require.Equal(t, uint64(0), id)
 }
@@ -203,7 +203,7 @@ func TestDelete(t *testing.T) {
 	require.Equal(t, uint64(3), s.leftTotal.Load())
 	require.Equal(t, uint64(3), s.rightTotal.Load())
 	require.Len(t, s.items, 3)
-	require.Len(t, s.itemsByID, 0)
+	require.Empty(t, s.itemsByID)
 }
 
 func TestPos(t *testing.T) {
