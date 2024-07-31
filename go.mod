@@ -5,7 +5,7 @@ go 1.22
 require (
 	github.com/bavix/features v1.0.0
 	github.com/google/uuid v1.6.0
-	github.com/gripmock/deeply v1.2.0
+	github.com/gripmock/deeply v1.2.1
 	github.com/stretchr/testify v1.9.0
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56
 	golang.org/x/text v0.16.0
