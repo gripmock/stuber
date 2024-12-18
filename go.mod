@@ -6,7 +6,7 @@ require (
 	github.com/bavix/features v1.0.0
 	github.com/google/uuid v1.6.0
 	github.com/gripmock/deeply v1.2.2
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56
 	golang.org/x/text v0.21.0
 	google.golang.org/grpc v1.69.0
