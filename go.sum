@@ -1,5 +1,5 @@
-github.com/bavix/features v1.0.0 h1:KyJzP1aKdTWSO7RxwX0Hega9qHUrSdiwdhI+uhAjUg4=
-github.com/bavix/features v1.0.0/go.mod h1:OLOA0UEsGMPY0Ofc/4kjajVB/H1zvITPAegB9RkewqM=
+github.com/bavix/features v1.0.1 h1:oVycVjV/z5+lJF2gjh7eKwpLUHgZQTCVTDj6aQkLkd8=
+github.com/bavix/features v1.0.1/go.mod h1:Stnn2H3jsUI3BblU73lqo7OHNkWqLMzq3B91tVGYqbE=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/frankban/quicktest v1.14.6 h1:7Xjx+VpznH+oBnejlPUj8oUpdxnVs4f8XU8WnHkI4W8=
