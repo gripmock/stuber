@@ -3,7 +3,7 @@ module github.com/gripmock/stuber
 go 1.22
 
 require (
-	github.com/bavix/features v1.0.0
+	github.com/bavix/features v1.0.1
 	github.com/google/uuid v1.6.0
 	github.com/gripmock/deeply v1.2.2
 	github.com/stretchr/testify v1.10.0
