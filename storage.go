@@ -2,12 +2,12 @@ package stuber
 
 import (
 	"errors"
+	"maps"
 	"slices"
 	"sync"
 	"sync/atomic"
 
 	"github.com/google/uuid"
-	"golang.org/x/exp/maps"
 )
 
 // ErrLeftNotFound is returned when the left value is not found.
@@ -89,7 +89,7 @@ func (s *storage) values() []Value {
 	//
 	// This function returns a slice of Value objects containing all the values
 	// stored in the storage. The values are returned in an arbitrary order.
-	return maps.Values(s.itemsByID)
+	return slices.Collect(maps.Values(s.itemsByID))
 }
 
 // findAll retrieves all the values associated with a given left and right values.
