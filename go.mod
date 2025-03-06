@@ -1,6 +1,7 @@
 module github.com/gripmock/stuber
 
 go 1.22
+toolchain go1.23.7
 
 require (
 	github.com/bavix/features v1.0.1
@@ -8,7 +9,7 @@ require (
 	github.com/gripmock/deeply v1.2.3
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56
-	golang.org/x/text v0.22.0
+	golang.org/x/text v0.23.0
 	google.golang.org/grpc v1.70.0
 )
 
