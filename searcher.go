@@ -2,10 +2,11 @@ package stuber
 
 import (
 	"errors"
+	"maps"
+	"slices"
 	"sync"
 
 	"github.com/google/uuid"
-	"golang.org/x/exp/maps"
 )
 
 // ErrServiceNotFound is returned when the service is not found.
@@ -147,7 +148,7 @@ func (s *searcher) used() []*Stub {
 	defer s.mu.RUnlock()
 
 	// Retrieve all Stub values with keys in the stubUsed map.
-	return s.castToStub(s.storage.findByIDs(maps.Keys(s.stubUsed)...))
+	return s.castToStub(s.storage.findByIDs(slices.Collect(maps.Keys(s.stubUsed))...))
 }
 
 // unused returns all Stub values that have not been used by the searcher.
