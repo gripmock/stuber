@@ -5,9 +5,8 @@ go 1.24
 require (
 	github.com/bavix/features v1.0.2
 	github.com/google/uuid v1.6.0
-	github.com/gripmock/deeply v1.2.3
+	github.com/gripmock/deeply v1.2.4
 	github.com/stretchr/testify v1.10.0
-	golang.org/x/exp v0.0.0-20250305212735-054e65f0b394
 	golang.org/x/text v0.23.0
 	google.golang.org/grpc v1.71.0
 )
