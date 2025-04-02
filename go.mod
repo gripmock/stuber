@@ -8,7 +8,7 @@ require (
 	github.com/gripmock/deeply v1.2.4
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/text v0.23.0
-	google.golang.org/grpc v1.71.0
+	google.golang.org/grpc v1.71.1
 )
 
 require (
