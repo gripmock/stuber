@@ -1,33 +1,53 @@
-run:
-  timeout: 1m
+version: "2"
 linters:
-  enable-all: true
+  default: all
   disable:
-    # turn on later
+    - exhaustruct
     - godox
-    # deprecated
-    - tenv
-    # not relevant
+    - paralleltest
     - varnamelen
     - wrapcheck
-    - paralleltest
-    - exhaustruct
-linters-settings:
-  lll:
-    line-length: 140
-  gci:
-    sections:
-      - Standard
-      - Default
-      - Prefix(github.com/gripmock)
-  depguard:
+  settings:
+    depguard:
+      rules:
+        main:
+          allow:
+            - $gostd
+            - github.com
+            - golang.org
+            - google.golang.org
+    lll:
+      line-length: 140
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
     rules:
-      main:
-        allow:
-          - $gostd
-          - github.com
-issues:
-  exclude-rules:
-    - path: (.+)_test.go
-      linters:
-        - dupl
+      - linters:
+          - dupl
+        path: (.+)_test.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+    - goimports
+  settings:
+    gci:
+      sections:
+        - Standard
+        - Default
+        - Prefix(github.com/gripmock)
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
