@@ -160,7 +160,7 @@ func (s *searcher) unused() []*Stub {
 	}
 	s.mu.RUnlock()
 
-	var unused []*Stub
+	unused := make([]*Stub, 0)
 
 	for stub := range s.iterAll() {
 		if _, exists := usedSet[stub.ID]; !exists {
@@ -291,7 +291,7 @@ func (s *searcher) mark(query Query, id uuid.UUID) {
 }
 
 func collectStubs(seq iter.Seq[Value]) []*Stub {
-	var result []*Stub
+	result := make([]*Stub, 0)
 
 	for v := range seq {
 		if stub, ok := v.(*Stub); ok {
