@@ -1,6 +1,8 @@
 package stuber //nolint:testpackage
 
 import (
+	"iter"
+	"maps"
 	"testing"
 
 	"github.com/google/uuid"
@@ -78,8 +80,8 @@ func TestAdd(t *testing.T) {
 		&testItem{id: uuid.New(), left: "Greeter5", right: "SayHello3"},
 	)
 
-	require.Equal(t, uint64(5), s.leftTotal.Load())
-	require.Equal(t, uint64(3), s.rightTotal.Load())
+	require.Equal(t, uint64(5), s.leftTotal)
+	require.Equal(t, uint64(3), s.rightTotal)
 	require.Len(t, s.items, 5)
 	require.Len(t, s.itemsByID, 6)
 }
@@ -90,8 +92,8 @@ func TestUpdate(t *testing.T) {
 	s := newStorage()
 	s.upsert(&testItem{id: id, left: "Greeter", right: "SayHello"})
 
-	require.Equal(t, uint64(1), s.leftTotal.Load())
-	require.Equal(t, uint64(1), s.rightTotal.Load())
+	require.Equal(t, uint64(1), s.leftTotal)
+	require.Equal(t, uint64(1), s.rightTotal)
 	require.Len(t, s.items, 1)
 	require.Len(t, s.itemsByID, 1)
 
@@ -104,8 +106,8 @@ func TestUpdate(t *testing.T) {
 
 	s.upsert(&testItem{id: id, left: "Greeter", right: "SayHello", value: 42})
 
-	require.Equal(t, uint64(1), s.leftTotal.Load())
-	require.Equal(t, uint64(1), s.rightTotal.Load())
+	require.Equal(t, uint64(1), s.leftTotal)
+	require.Equal(t, uint64(1), s.rightTotal)
 	require.Len(t, s.items, 1)
 	require.Len(t, s.itemsByID, 1)
 
@@ -133,8 +135,8 @@ func TestFindByID(t *testing.T) {
 		&testItem{id: id, left: "Greeter1", right: "SayHello3"},
 	)
 
-	require.Equal(t, uint64(5), s.leftTotal.Load())
-	require.Equal(t, uint64(3), s.rightTotal.Load())
+	require.Equal(t, uint64(5), s.leftTotal)
+	require.Equal(t, uint64(3), s.rightTotal)
 	require.Len(t, s.items, 6)
 	require.Len(t, s.itemsByID, 7)
 
@@ -155,25 +157,65 @@ func TestFindAll(t *testing.T) {
 		&testItem{id: uuid.New(), left: "Greeter1", right: "SayHello3"},
 	)
 
-	require.Equal(t, uint64(5), s.leftTotal.Load())
-	require.Equal(t, uint64(3), s.rightTotal.Load())
-	require.Len(t, s.items, 6)
-	require.Len(t, s.itemsByID, 7)
+	collect := func(seq iter.Seq[Value]) []Value {
+		var res []Value
+		for v := range seq {
+			res = append(res, v)
+		}
 
-	g1s1, err := s.findAll("Greeter1", "SayHello1")
-	require.NoError(t, err)
-	require.Len(t, g1s1, 2)
+		return res
+	}
 
-	g2s2, err := s.findAll("Greeter2", "SayHello2")
-	require.NoError(t, err)
-	require.Len(t, g2s2, 1)
+	t.Run("Greeter1/SayHello1", func(t *testing.T) {
+		seq, err := s.findAll("Greeter1", "SayHello1")
+		require.NoError(t, err)
+		require.Len(t, collect(seq), 2)
+	})
 
-	g3s2, err := s.findAll("Greeter3", "SayHello2")
-	require.NoError(t, err)
-	require.Len(t, g3s2, 1)
+	t.Run("Greeter2/SayHello2", func(t *testing.T) {
+		seq, err := s.findAll("Greeter2", "SayHello2")
+		require.NoError(t, err)
+		require.Len(t, collect(seq), 1)
+	})
 
-	_, err = s.findAll("Greeter3", "SayHello3")
-	require.ErrorIs(t, ErrRightNotFound, err)
+	t.Run("Greeter3/SayHello2", func(t *testing.T) {
+		seq, err := s.findAll("Greeter3", "SayHello2")
+		require.NoError(t, err)
+		require.Len(t, collect(seq), 1)
+	})
+
+	t.Run("Greeter3/SayHello3", func(t *testing.T) {
+		_, err := s.findAll("Greeter3", "SayHello3")
+		require.ErrorIs(t, err, ErrRightNotFound)
+	})
+}
+
+func TestFindByIDs(t *testing.T) {
+	s := newStorage()
+	id1, id2, id3 := uuid.New(), uuid.New(), uuid.New()
+	s.upsert(
+		&testItem{id: id1, left: "A", right: "B"},
+		&testItem{id: id2, left: "C", right: "D"},
+		&testItem{id: id3, left: "E", right: "F"},
+	)
+
+	t.Run("existing IDs", func(t *testing.T) {
+		var results []Value
+		for v := range s.findByIDs(maps.Keys(map[uuid.UUID]struct{}{id1: {}, id2: {}})) {
+			results = append(results, v)
+		}
+
+		require.Len(t, results, 2)
+	})
+
+	t.Run("mixed IDs", func(t *testing.T) {
+		var results []Value
+		for v := range s.findByIDs(maps.Keys(map[uuid.UUID]struct{}{id1: {}, uuid.Nil: {}})) {
+			results = append(results, v)
+		}
+
+		require.Len(t, results, 1)
+	})
 }
 
 func TestDelete(t *testing.T) {
@@ -188,21 +230,27 @@ func TestDelete(t *testing.T) {
 	)
 
 	require.Equal(t, 0, s.del())
-	require.Equal(t, uint64(3), s.leftTotal.Load())
-	require.Equal(t, uint64(3), s.rightTotal.Load())
+	require.Equal(t, uint64(3), s.leftTotal)
+	require.Equal(t, uint64(3), s.rightTotal)
 	require.Len(t, s.items, 3)
 	require.Len(t, s.itemsByID, 3)
 
 	require.Equal(t, 1, s.del(id1))
-	require.Equal(t, uint64(3), s.leftTotal.Load())
-	require.Equal(t, uint64(3), s.rightTotal.Load())
-	require.Len(t, s.items, 3)
+	require.Equal(t, uint64(3), s.leftTotal)
+	require.Equal(t, uint64(3), s.rightTotal)
+	require.Len(t, s.items, 2)
 	require.Len(t, s.itemsByID, 2)
 
 	require.Equal(t, 2, s.del(id2, id3))
-	require.Equal(t, uint64(3), s.leftTotal.Load())
-	require.Equal(t, uint64(3), s.rightTotal.Load())
-	require.Len(t, s.items, 3)
+	require.Equal(t, uint64(3), s.leftTotal)
+	require.Equal(t, uint64(3), s.rightTotal)
+	require.Empty(t, s.items)
+	require.Empty(t, s.itemsByID)
+
+	require.Equal(t, 0, s.del(id1, id2, id3))
+	require.Equal(t, uint64(3), s.leftTotal)
+	require.Equal(t, uint64(3), s.rightTotal)
+	require.Empty(t, s.items)
 	require.Empty(t, s.itemsByID)
 }
 

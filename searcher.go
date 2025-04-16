@@ -2,8 +2,8 @@ package stuber
 
 import (
 	"errors"
+	"iter"
 	"maps"
-	"slices"
 	"sync"
 
 	"github.com/google/uuid"
@@ -106,14 +106,12 @@ func (s *searcher) findByID(id uuid.UUID) *Stub {
 // - []*Stub: The Stub values that match the given service and method, or nil if not found.
 // - error: An error if the search fails.
 func (s *searcher) findBy(service, method string) ([]*Stub, error) {
-	// Retrieve all Stub values that match the given service and method from the storage.
-	all, err := s.storage.findAll(service, method)
+	seq, err := s.storage.findAll(service, method)
 	if err != nil {
 		return nil, s.wrap(err)
 	}
 
-	// Cast the values to Stub pointers and return.
-	return s.castToStub(all), nil
+	return collectStubs(seq), nil
 }
 
 // clear resets the searcher.
@@ -135,8 +133,7 @@ func (s *searcher) clear() {
 // Returns:
 // - []*Stub: The Stub values stored in the searcher.
 func (s *searcher) all() []*Stub {
-	// Cast the values to Stub pointers and return.
-	return s.castToStub(s.storage.values())
+	return collectStubs(s.storage.values())
 }
 
 // used returns all Stub values that have been used by the searcher.
@@ -147,8 +144,7 @@ func (s *searcher) used() []*Stub {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	// Retrieve all Stub values with keys in the stubUsed map.
-	return s.castToStub(s.storage.findByIDs(slices.Collect(maps.Keys(s.stubUsed))...))
+	return collectStubs(s.storage.findByIDs(maps.Keys(s.stubUsed)))
 }
 
 // unused returns all Stub values that have not been used by the searcher.
@@ -156,23 +152,23 @@ func (s *searcher) used() []*Stub {
 // Returns:
 // - []*Stub: The Stub values that have not been used by the searcher.
 func (s *searcher) unused() []*Stub {
+	usedSet := make(map[uuid.UUID]struct{})
+
 	s.mu.RLock()
-	defer s.mu.RUnlock()
+	for id := range s.stubUsed {
+		usedSet[id] = struct{}{}
+	}
+	s.mu.RUnlock()
 
-	// Initialize an empty slice to store the results.
-	results := make([]*Stub, 0, len(s.all()))
+	var unused []*Stub
 
-	// Iterate over all Stub values.
-	for _, stub := range s.all() {
-		// Check if the stub has not been used.
-		if _, ok := s.stubUsed[stub.ID]; !ok {
-			// Add the stub to the results.
-			results = append(results, stub)
+	for stub := range s.iterAll() {
+		if _, exists := usedSet[stub.ID]; !exists {
+			unused = append(unused, stub)
 		}
 	}
 
-	// Return the results.
-	return results
+	return unused
 }
 
 // find retrieves the Stub value associated with the given Query from the searcher.
@@ -187,7 +183,7 @@ func (s *searcher) find(query Query) (*Result, error) {
 	// Check if the Query has an ID field.
 	if query.ID != nil {
 		// Search for the Stub value with the given ID.
-		return s.searchByID(query.Service, query.Method, query)
+		return s.searchByID(query)
 	}
 
 	// Search for the Stub value with the given service and method.
@@ -197,16 +193,14 @@ func (s *searcher) find(query Query) (*Result, error) {
 // searchByID retrieves the Stub value associated with the given ID from the searcher.
 //
 // Parameters:
-// - service: The service field used to search for the Stub value.
-// - method: The method field used to search for the Stub value.
 // - query: The Query used to search for a Stub value.
 //
 // Returns:
 // - *Result: The Result containing the found Stub value (if any), or nil.
 // - error: An error if the search fails.
-func (s *searcher) searchByID(service, method string, query Query) (*Result, error) {
+func (s *searcher) searchByID(query Query) (*Result, error) {
 	// Check if the given service and method are valid.
-	_, err := s.storage.posByN(service, method)
+	_, err := s.storage.posByN(query.Service, query.Method)
 	if err != nil {
 		return nil, s.wrap(err)
 	}
@@ -233,13 +227,6 @@ func (s *searcher) searchByID(service, method string, query Query) (*Result, err
 // - *Result: The Result containing the found Stub value (if any), or nil.
 // - error: An error if the search fails.
 func (s *searcher) search(query Query) (*Result, error) {
-	// Find all Stub values with the given service and method.
-	stubs, err := s.findBy(query.Service, query.Method)
-	if err != nil {
-		return nil, s.wrap(err)
-	}
-
-	// Initialize variables to store the found and similar Stub values.
 	var (
 		found       *Stub
 		foundRank   float64
@@ -247,37 +234,39 @@ func (s *searcher) search(query Query) (*Result, error) {
 		similarRank float64
 	)
 
-	// Iterate over the found Stub values.
-	for _, stub := range stubs {
-		// Calculate the rank of the current Stub value.
-		current := rankMatch(query, stub)
+	seq, err := s.storage.findAll(query.Service, query.Method)
+	if err != nil {
+		return nil, s.wrap(err)
+	}
 
-		// Update the similar Stub value if the current rank is higher.
-		if current > similarRank {
-			similar = stub
-			similarRank = current
+	for v := range seq {
+		stub, ok := v.(*Stub)
+		if !ok {
+			continue
 		}
 
-		// Update the found Stub value if the current Stub value matches the query and has a higher rank.
+		current := rankMatch(query, stub)
+
+		if current > similarRank {
+			similar, similarRank = stub, current
+		}
+
 		if match(query, stub) && current > foundRank {
-			found = stub
-			foundRank = current
+			found, foundRank = stub, current
 		}
 	}
 
-	// If a found Stub value is found, mark it as used and return it.
 	if found != nil {
 		s.mark(query, found.ID)
 
 		return &Result{found: found}, nil
 	}
 
-	// If no found Stub value is found, return the similar Stub value.
-	if similar == nil {
-		return nil, ErrStubNotFound
+	if similar != nil {
+		return &Result{similar: similar}, nil
 	}
 
-	return &Result{found: nil, similar: similar}, nil
+	return nil, ErrStubNotFound
 }
 
 // mark marks the given Stub value as used in the searcher.
@@ -301,6 +290,30 @@ func (s *searcher) mark(query Query, id uuid.UUID) {
 	s.stubUsed[id] = struct{}{}
 }
 
+func collectStubs(seq iter.Seq[Value]) []*Stub {
+	var result []*Stub
+
+	for v := range seq {
+		if stub, ok := v.(*Stub); ok {
+			result = append(result, stub)
+		}
+	}
+
+	return result
+}
+
+func (s *searcher) iterAll() iter.Seq[*Stub] {
+	return func(yield func(*Stub) bool) {
+		for v := range s.storage.values() {
+			if stub, ok := v.(*Stub); ok {
+				if !yield(stub) {
+					return
+				}
+			}
+		}
+	}
+}
+
 // castToValue converts a slice of *Stub values to a slice of Value interface{}.
 //
 // Parameters:
@@ -315,25 +328,6 @@ func (s *searcher) castToValue(values []*Stub) []Value {
 	}
 
 	return result
-}
-
-// castToStub converts a slice of Value interface{} to a slice of *Stub.
-//
-// Parameters:
-// - values: A slice of Value interface{} to convert.
-//
-// Returns:
-// - A slice of *Stub containing the converted values.
-func (s *searcher) castToStub(values []Value) []*Stub {
-	ret := make([]*Stub, 0, len(values))
-
-	for _, v := range values {
-		if s, ok := v.(*Stub); ok {
-			ret = append(ret, s)
-		}
-	}
-
-	return ret
 }
 
 // wrap wraps an error with specific error types.

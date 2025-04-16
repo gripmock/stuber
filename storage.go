@@ -2,10 +2,8 @@ package stuber
 
 import (
 	"errors"
-	"maps"
-	"slices"
+	"iter"
 	"sync"
-	"sync/atomic"
 
 	"github.com/google/uuid"
 )
@@ -17,421 +15,343 @@ var ErrLeftNotFound = errors.New("left not found")
 var ErrRightNotFound = errors.New("right not found")
 
 // Value is a type used to store the result of a search.
-//
-// This interface is used to represent the search results returned by the
-// Find and Search methods.
 type Value interface {
-	Key() uuid.UUID // The UUID of the value.
-	Left() string   // The left value of the value.
-	Right() string  // The right value of the value.
+	Key() uuid.UUID
+	Left() string
+	Right() string
 }
 
-// storage is a struct that manages the storage of search results.
+// storage is a struct that manages the storage of search results with optimized performance and memory usage.
 //
-// It contains a mutex for concurrent access, the total number of stored items,
-// maps to store and retrieve values by their left and right values, a map to
-// store values by their UUID, and a map to retrieve values by their UUID.
+// Fields:
+// - mu: A mutex that is used to protect the storage from concurrent access.
+// - leftTotal and rightTotal: The total number of left and right values in the storage.
+// - lefts and rights: Maps of left and right values to their respective IDs.
+// - leftRights: A map that is used to store the pairing of left and right values.
+// - items: A map of left-right pair IDs to their respective items.
+// - itemsByID: A map of item IDs to their respective items.
 type storage struct {
-	mu         sync.RWMutex          // Mutex for concurrent access.
-	leftTotal  atomic.Uint64         // Total number of stored left values.
-	rightTotal atomic.Uint64         // Total number of stored right values.
-	lefts      map[string]uint64     // Map to store values by their left values.
-	rights     map[string]uint64     // Map to store values by their right values.
-	leftRights map[uint64][]uint64   // Map to store the right values associated with a left value.
-	items      map[uuid.UUID][]Value // Map to store values by their UUID.
-	itemsByID  map[uuid.UUID]Value   // Map to retrieve values by their UUID.
+	mu         sync.RWMutex
+	leftTotal  uint64
+	rightTotal uint64
+	lefts      map[string]uint64
+	rights     map[string]uint64
+	leftRights map[[2]uint64]struct{}
+	items      map[uuid.UUID]map[uuid.UUID]Value
+	itemsByID  map[uuid.UUID]Value
 }
 
-// newStorage creates a new storage instance.
+// itemMapPool is a sync.Pool that is used to store and retrieve maps that
+// are used to store items in the storage.
 //
-// It creates a new instance of the storage struct with empty maps.
+// The New method of the sync.Pool is used to create a new map when the pool
+// is empty. The method returns a pointer to the newly created map.
+//
+//nolint:gochecknoglobals
+var itemMapPool = sync.Pool{
+	New: func() any {
+		return make(map[uuid.UUID]Value)
+	},
+}
+
+// newStorage creates a new instance of the storage struct.
 func newStorage() *storage {
 	return &storage{
-		rights:     map[string]uint64{},
-		lefts:      map[string]uint64{},
-		leftRights: map[uint64][]uint64{},
-		items:      map[uuid.UUID][]Value{},
-		itemsByID:  map[uuid.UUID]Value{},
+		lefts:      make(map[string]uint64),
+		rights:     make(map[string]uint64),
+		leftRights: make(map[[2]uint64]struct{}),
+		items:      make(map[uuid.UUID]map[uuid.UUID]Value),
+		itemsByID:  make(map[uuid.UUID]Value),
 	}
 }
 
 // clear resets the storage.
-//
-// It resets all the internal maps and counters to their initial state.
 func (s *storage) clear() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Reset the total number of stored left values.
-	s.leftTotal = atomic.Uint64{}
-
-	// Reset the total number of stored right values.
-	s.rightTotal = atomic.Uint64{}
-
-	// Reset the map that stores values by their left values.
-	s.lefts = map[string]uint64{}
-
-	// Reset the map that stores values by their right values.
+	s.leftTotal = 0
+	s.rightTotal = 0
+	s.lefts = make(map[string]uint64)
 	s.rights = make(map[string]uint64)
-
-	// Reset the map that stores the right values associated with a left value.
-	s.leftRights = map[uint64][]uint64{}
-
-	// Reset the map that stores values by their UUID.
-	s.items = map[uuid.UUID][]Value{}
-
-	// Reset the map that retrieves values by their UUID.
-	s.itemsByID = map[uuid.UUID]Value{}
+	s.leftRights = make(map[[2]uint64]struct{})
+	s.items = make(map[uuid.UUID]map[uuid.UUID]Value)
+	s.itemsByID = make(map[uuid.UUID]Value)
 }
 
-func (s *storage) values() []Value {
-	// values returns all the values stored in the storage.
-	//
-	// This function returns a slice of Value objects containing all the values
-	// stored in the storage. The values are returned in an arbitrary order.
-	return slices.Collect(maps.Values(s.itemsByID))
+// values returns an iterator sequence of all Value items stored in the
+// storage.
+func (s *storage) values() iter.Seq[Value] {
+	return func(yield func(Value) bool) {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+
+		for _, v := range s.itemsByID {
+			if !yield(v) {
+				return
+			}
+		}
+	}
 }
 
-// findAll retrieves all the values associated with a given left and right values.
-//
-// This function takes a left and right value as parameters and returns a slice of
-// Value objects containing all the values associated with those values. If no
-// values are found, it returns an empty slice and a nil error.
+// findAll retrieves all Value items that match the given left and right names.
+// It returns an iterator sequence of the matched Value items or an error if the
+// names are not found.
 //
 // Parameters:
-// - left: The left value to search for.
-// - right: The right value to search for.
+// - left: The left name for matching.
+// - right: The right name for matching.
 //
 // Returns:
-//   - []Value: A slice containing all the values associated with the given left
-//     and right values.
-//   - error: A nil error if the values are found, otherwise an error indicating
-//     that the values were not found.
-func (s *storage) findAll(left, right string) ([]Value, error) {
-	// Find the position of the given left and right values.
-	pos, err := s.posByN(left, right)
+// - iter.Seq[Value]: A sequence of matched Value items.
+// - error: An error if the left or right name is not found.
+func (s *storage) findAll(left, right string) (iter.Seq[Value], error) {
+	index, err := s.posByN(left, right)
 	if err != nil {
 		return nil, err
 	}
 
-	// Lock the storage for reading.
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	return func(yield func(Value) bool) {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
 
-	// Retrieve the values associated with the given position.
-	return s.items[pos], nil
+		for _, v := range s.items[index] {
+			if !yield(v) {
+				return
+			}
+		}
+	}, nil
 }
 
-// findByID retrieves the value associated with the given ID.
-//
-// This function takes a key as a parameter and returns the value associated with
-// that key. If no value is found, it returns nil.
+// findByID retrieves the Stub value associated with the given UUID from the
+// storage.
 //
 // Parameters:
-//   - key: The ID of the value to search for.
+// - key: The UUID of the Stub value to retrieve.
 //
 // Returns:
-//   - Value: The value associated with the given ID, or nil if no value is
-//     found.
+// - Value: The Stub value associated with the given UUID, or nil if not found.
 func (s *storage) findByID(key uuid.UUID) Value { //nolint:ireturn
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	// Check if the value exists in the storage.
-	if v, ok := s.itemsByID[key]; ok {
-		return v
-	}
-
-	return nil
+	return s.itemsByID[key]
 }
 
-// findByIDs retrieves the values associated with the given IDs.
-//
-// This function takes a slice of keys as a parameter and returns the values
-// associated with those keys. If a value is not found, it is not included in
-// the results.
-//
-// Parameters:
-// - keys: A slice of IDs to search for.
+// findByIDs retrieves the Stub values associated with the given UUIDs from the
+// storage.
 //
 // Returns:
-//   - []Value: A slice of values associated with the given IDs.
-func (s *storage) findByIDs(keys ...uuid.UUID) []Value {
-	// Lock the storage for reading.
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+//   - iter.Seq[Value]: The Stub values associated with the given UUIDs, or nil if
+//     not found.
+func (s *storage) findByIDs(ids iter.Seq[uuid.UUID]) iter.Seq[Value] {
+	return func(yield func(Value) bool) {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
 
-	// Initialize a slice to store the results.
-	results := make([]Value, 0, len(keys))
-
-	// Iterate over each key.
-	for _, key := range keys {
-		// Check if the value exists in the storage.
-		if v, ok := s.itemsByID[key]; ok {
-			// Append the value to the results if it exists.
-			results = append(results, v)
+		for id := range ids {
+			if v, ok := s.itemsByID[id]; ok {
+				if !yield(v) {
+					return
+				}
+			}
 		}
 	}
-
-	// Return the results.
-	return results
 }
 
+// upsert inserts or updates the given Value items in storage.
+// It returns the UUIDs of the inserted or updated items.
 func (s *storage) upsert(values ...Value) []uuid.UUID {
-	// upsert inserts the given values into the storage. If a value already exists
-	// with the same key, it is updated.
-	//
-	// The function returns a slice of UUIDs representing the keys of the inserted
-	// or updated values.
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Prepare a slice to store the result UUIDs.
 	results := make([]uuid.UUID, len(values))
 
+	// Process each value to insert or update.
 	for i, v := range values {
-		// Get the ID of the left value. If it does not exist, create a new ID.
+		// Retrieve or create IDs for the left and right names.
 		leftID := s.leftIDOrNew(v.Left())
-
-		// Get the ID of the right value. If it does not exist, create a new ID.
 		rightID := s.rightIDOrNew(v.Right())
 
-		// Calculate the index of the value based on the left and right IDs.
-		ind := s.pos(leftID, rightID)
+		// Compute the composite index from the left and right IDs.
+		index := s.pos(leftID, rightID)
 
-		// Lock the storage for writing.
-		s.mu.Lock()
+		// Register the left-right pairing.
+		s.leftRights[[2]uint64{leftID, rightID}] = struct{}{}
 
-		// Store the key and value in the storage.
-		results[i] = v.Key()
+		// Initialize the map at the index if it doesn't exist.
+		if s.items[index] == nil {
+			if p := itemMapPool.Get(); p != nil {
+				s.items[index], _ = p.(map[uuid.UUID]Value)
+				// Clear any pre-existing entries.
+				for k := range s.items[index] {
+					delete(s.items[index], k)
+				}
+			} else {
+				s.items[index] = make(map[uuid.UUID]Value)
+			}
+		}
 
-		s.leftRights[leftID] = append(s.leftRights[leftID], rightID)
-		s.items[ind] = append(s.items[ind], v)
+		// Insert or update the value in the storage.
+		s.items[index][v.Key()] = v
 		s.itemsByID[v.Key()] = v
 
-		// Unlock the storage.
-		s.mu.Unlock()
+		// Record the UUID of the processed value.
+		results[i] = v.Key()
 	}
 
-	// Return the keys of the inserted or updated values.
+	// Return the UUIDs of the inserted or updated values.
 	return results
 }
 
-// del deletes the values with the given keys from the storage.
-//
-// The function returns the number of values that were successfully deleted.
+// del deletes the Stub values with the given UUIDs from the storage.
+// It returns the number of Stub values that were successfully deleted.
 func (s *storage) del(keys ...uuid.UUID) int {
-	result := 0
-	// Map to store the keys to be deleted for each position.
-	deleteIDs := make(map[uuid.UUID][]uuid.UUID, len(keys))
-
-	// Iterate over the keys to be deleted.
-	for _, key := range keys {
-		// Get the value associated with the key.
-		v := s.findByID(key)
-		// Skip if the value doesn't exist.
-		if v == nil {
-			continue
-		}
-
-		// Get the position of the value in the storage.
-		pos, err := s.posByN(v.Left(), v.Right())
-		// Skip if the position couldn't be determined.
-		if err != nil {
-			continue
-		}
-
-		// Add the key to the list of keys to be deleted for the position.
-		deleteIDs[pos] = append(deleteIDs[pos], key)
-		result++
-	}
-
-	// Lock the storage for writing.
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Delete the values with the keys from the storage.
-	for pos, v := range deleteIDs {
-		s.items[pos] = slices.DeleteFunc(s.items[pos], func(value Value) bool {
-			// Check if the key of the value is in the list of keys to be deleted.
-			return slices.Contains(v, value.Key())
-		})
+	type posKey struct {
+		pos uuid.UUID
+		key uuid.UUID
 	}
 
-	// Delete the values from the itemsByID map.
+	toDelete := make([]posKey, 0, len(keys))
+
 	for _, key := range keys {
-		delete(s.itemsByID, key)
+		if v, ok := s.itemsByID[key]; ok {
+			leftID := s.lefts[v.Left()]
+			rightID := s.rights[v.Right()]
+			pos := s.pos(leftID, rightID)
+			toDelete = append(toDelete, posKey{pos, key})
+		}
 	}
 
-	// Return the number of values that were successfully deleted.
-	return result
+	deleted := 0
+	posMap := make(map[uuid.UUID][]uuid.UUID, len(toDelete))
+
+	for _, pk := range toDelete {
+		posMap[pk.pos] = append(posMap[pk.pos], pk.key)
+	}
+
+	for pos, ids := range posMap {
+		m := s.items[pos]
+		for _, id := range ids {
+			delete(m, id)
+			delete(s.itemsByID, id)
+
+			deleted++
+		}
+
+		if len(m) == 0 {
+			itemMapPool.Put(m)
+			delete(s.items, pos)
+		}
+	}
+
+	return deleted
 }
 
-func (s *storage) leftID(name string) (uint64, error) {
-	// leftId returns the ID associated with the given left name.
-	//
-	// This function takes a left name as a parameter and returns the ID associated
-	// with that name. If no ID is found, it returns 0 and an ErrLeftNotFound
-	// error.
-	//
-	// Parameters:
-	// - name: The name of the left to search for.
-	//
-	// Returns:
-	//   - uint64: The ID associated with the given left name, or 0 if no ID is
-	//     found.
-	//   - error: An error if the left name is not found.
+// leftID retrieves the ID associated with the given left name.
+// It returns the ID if found, or an error if the left name does not exist.
+func (s *storage) leftID(leftName string) (uint64, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	// Check if the ID exists in the lefts map.
-	if id, ok := s.lefts[name]; ok {
-		// Return the ID if it exists.
-		return id, nil
+	id, ok := s.lefts[leftName]
+	if !ok {
+		return 0, ErrLeftNotFound
 	}
 
-	// Return 0 and an error if the ID does not exist.
-	return 0, ErrLeftNotFound
+	return id, nil
 }
 
-// leftIDOrNew returns the ID associated with the given left name.
-//
-// This function takes a left name as a parameter and returns the ID associated
-// with that name. If no ID is found, it creates a new ID and returns it.
-//
-// Parameters:
-// - name: The name of the left to search for or create.
-//
-// Returns:
-//   - uint64: The ID associated with the given left name, either found or
-//     created.
+// leftIDOrNew returns the ID of the given left name.
+// If the ID does not exist, it will be created.
 func (s *storage) leftIDOrNew(name string) uint64 {
-	// Check if the ID exists in the lefts map.
-	if id, err := s.leftID(name); err == nil {
-		// Return the ID if it exists.
+	if id, exists := s.lefts[name]; exists {
 		return id
 	}
 
-	// Acquire a write lock to ensure atomicity.
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.leftTotal++
+	s.lefts[name] = s.leftTotal
 
-	// Create a new ID by incrementing the total count of lefts.
-	s.lefts[name] = s.leftTotal.Add(1)
-
-	// Return the newly created ID.
-	return s.lefts[name]
+	return s.leftTotal
 }
 
-// rightID returns the ID associated with the given right name.
-//
-// This function takes a right name as a parameter and returns the ID associated
-// with that name. If no ID is found, it returns an error.
-//
-// Parameters:
-// - name: The name of the right to search for.
-//
-// Returns:
-//   - uint64: The ID associated with the given right name.
-//   - error: An error if the ID is not found.
-func (s *storage) rightID(name string) (uint64, error) {
-	// Acquire a read lock to ensure read consistency.
+// rightID returns the ID of the given right name.
+// If the ID does not exist, ErrRightNotFound will be returned.
+func (s *storage) rightID(rightName string) (uint64, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	// Check if the ID exists in the rights map.
-	if id, ok := s.rights[name]; ok {
-		// Return the ID if it exists.
-		return id, nil
+	id, ok := s.rights[rightName]
+	if !ok {
+		return 0, ErrRightNotFound
 	}
 
-	// Return 0 and an error if the ID does not exist.
-	return 0, ErrRightNotFound
+	return id, nil
 }
 
+// rightIDOrNew returns the ID of the given right name.
+// If the ID does not exist, it will be created.
 func (s *storage) rightIDOrNew(name string) uint64 {
-	// Get the ID associated with the given right name.
-	// If the ID exists, return it.
-	if id, err := s.rightID(name); err == nil {
+	if id, exists := s.rights[name]; exists {
 		return id
 	}
 
-	// Acquire a write lock to ensure atomicity.
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.rightTotal++
+	s.rights[name] = s.rightTotal
 
-	// Create a new ID by incrementing the total count of rights.
-	s.rights[name] = s.rightTotal.Add(1)
-
-	// Return the newly created ID.
-	return s.rights[name]
+	return s.rightTotal
 }
 
-// posByN retrieves the position associated with the given left and right values.
-//
-// This function takes a left and right value as parameters and returns a UUID
-// representing the position of those values. If the left or right ID is not
-// found, it returns uuid.Nil and an error. It also checks if the left-right
-// combination exists in the leftRights map and returns an error if it does not.
-//
-// Parameters:
-// - left: The left value to search for.
-// - right: The right value to search for.
-//
-// Returns:
-//   - uuid.UUID: A UUID representing the position of the given left and right values.
-//   - error: An error if the ID is not found or the left-right combination does not exist.
-func (s *storage) posByN(left, right string) (uuid.UUID, error) {
-	// Get the ID associated with the given left value.
-	// If the ID exists, continue.
-	leftID, err := s.leftID(left)
-	if err != nil {
-		return uuid.Nil, err
-	}
-
-	// Get the ID associated with the given right value.
-	// If the ID exists, continue.
-	rightID, err := s.rightID(right)
-	if err != nil {
-		return uuid.Nil, err
-	}
-
-	// Acquire a read lock to ensure read consistency.
+// posByN creates a UUID from the given left and right names.
+// The resulting UUID is 128 bits long, with the left ID in the first 64 bits,
+// and the right ID in the second 64 bits.
+func (s *storage) posByN(leftName, rightName string) (uuid.UUID, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	// Check if the left-right combination exists in the leftRights map.
-	if !slices.Contains(s.leftRights[leftID], rightID) {
+	leftID, leftExists := s.lefts[leftName]
+	if !leftExists {
+		return uuid.Nil, ErrLeftNotFound
+	}
+
+	rightID, rightExists := s.rights[rightName]
+	if !rightExists {
 		return uuid.Nil, ErrRightNotFound
 	}
 
-	// Calculate the position based on the left and right IDs.
+	key := [2]uint64{leftID, rightID}
+	if _, exists := s.leftRights[key]; !exists {
+		return uuid.Nil, ErrRightNotFound
+	}
+
 	return s.pos(leftID, rightID), nil
 }
 
-// pos calculates the UUID based on the given left and right values.
-//
-// Parameters:
-// - left: The left value.
-// - right: The right value.
-//
-// Returns:
-//   - uuid.UUID: The calculated UUID.
-//
-//nolint:mnd
-func (s *storage) pos(left, right uint64) uuid.UUID {
+// pos creates a UUID from the given left and right IDs.
+// The resulting UUID is 128 bits long, with the left ID in the first 64 bits,
+// and the right ID in the second 64 bits.
+func (s *storage) pos(leftID, rightID uint64) uuid.UUID {
+	//nolint:mnd
 	return uuid.UUID{
-		byte(left >> 56),
-		byte(left >> 48),
-		byte(left >> 40),
-		byte(left >> 32),
-		byte(left >> 24),
-		byte(left >> 16),
-		byte(left >> 8),
-		byte(left),
-		byte(right >> 56),
-		byte(right >> 48),
-		byte(right >> 40),
-		byte(right >> 32),
-		byte(right >> 24),
-		byte(right >> 16),
-		byte(right >> 8),
-		byte(right),
+		byte(leftID >> 56),
+		byte(leftID >> 48),
+		byte(leftID >> 40),
+		byte(leftID >> 32),
+		byte(leftID >> 24),
+		byte(leftID >> 16),
+		byte(leftID >> 8),
+		byte(leftID),
+		byte(rightID >> 56),
+		byte(rightID >> 48),
+		byte(rightID >> 40),
+		byte(rightID >> 32),
+		byte(rightID >> 24),
+		byte(rightID >> 16),
+		byte(rightID >> 8),
+		byte(rightID),
 	}
 }
