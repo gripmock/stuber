@@ -335,6 +335,51 @@ func TestResult_Similar(t *testing.T) {
 	require.NotNil(t, r.Similar())
 }
 
+func TestStuber_MatchesEqualsFound(t *testing.T) {
+	s := stuber.NewBudgerigar(features.New(stuber.MethodTitle))
+	// "ignoreArrayOrder": true,
+	// "equals": { "id": "123", "tags": ["grpc", "mock"] },
+	// "matches": { "name": "^user_\\d+$" },
+	s.PutMany(
+		&stuber.Stub{
+			ID:      uuid.New(),
+			Service: "Greeter1",
+			Method:  "SayHello1",
+			Input: stuber.InputData{
+				IgnoreArrayOrder: true,
+				Contains: map[string]any{
+					"id":   "123",
+					"tags": []any{"grpc", "mock"},
+				},
+				Matches: map[string]any{
+					"name": "^user_\\d+$",
+				},
+			},
+			Output: stuber.Output{Data: map[string]any{"message": "hello world"}},
+		},
+	)
+
+	// {
+	// 	"id": 123,
+	// 	"name": "user_456",
+	// 	"tags": ["grpc", "mock"]
+	// }
+	r, err := s.FindByQuery(stuber.Query{
+		ID:      nil,
+		Service: "Greeter1",
+		Method:  "SayHello1",
+		Headers: nil,
+		Data: map[string]any{
+			"id":   "123",
+			"name": "user_456",
+			"tags": []any{"mock", "grpc"},
+		},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, r.Found())
+	require.Nil(t, r.Similar())
+}
+
 func TestDelete(t *testing.T) {
 	id1, id2, id3 := uuid.New(), uuid.New(), uuid.New()
 
