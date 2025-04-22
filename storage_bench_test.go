@@ -1,11 +1,16 @@
 package stuber //nolint:testpackage
 
 import (
-	"fmt"
+	"iter"
 	"testing"
 
 	"github.com/google/uuid"
 )
+
+//nolint:gochecknoinits
+func init() {
+	uuid.EnableRandPool()
+}
 
 func BenchmarkStorageValues(b *testing.B) {
 	items := make([]Value, 0, b.N)
@@ -34,11 +39,13 @@ func BenchmarkStorageFindAll(b *testing.B) {
 	s := newStorage()
 	s.upsert(items...)
 
+	var all iter.Seq[Value]
+
 	b.ReportAllocs()
 	b.ResetTimer()
 
 	for range b.N {
-		all, _ := s.findAll("A", "B")
+		all, _ = s.findAll("A", "B")
 		for range all { //nolint:revive
 		}
 	}
@@ -123,7 +130,7 @@ func BenchmarkStorageLeftIDOrNew(b *testing.B) {
 	b.ResetTimer()
 
 	for range b.N {
-		_ = s.leftIDOrNew(fmt.Sprintf("A%s", uuid.New()))
+		_ = s.leftIDOrNew(uuid.NewString())
 	}
 }
 
@@ -146,6 +153,6 @@ func BenchmarkStorageRightIDOrNew(b *testing.B) {
 	b.ResetTimer()
 
 	for range b.N {
-		_ = s.rightIDOrNew(fmt.Sprintf("B%s", uuid.New()))
+		_ = s.rightIDOrNew(uuid.NewString())
 	}
 }

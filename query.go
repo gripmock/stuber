@@ -13,11 +13,11 @@ const (
 )
 
 type Query struct {
-	ID      *uuid.UUID             `json:"id,omitempty"`
-	Service string                 `json:"service"`
-	Method  string                 `json:"method"`
-	Headers map[string]interface{} `json:"headers"`
-	Data    map[string]interface{} `json:"data"`
+	ID      *uuid.UUID     `json:"id,omitempty"`
+	Service string         `json:"service"`
+	Method  string         `json:"method"`
+	Headers map[string]any `json:"headers"`
+	Data    map[string]any `json:"data"`
 
 	toggles features.Toggles
 }

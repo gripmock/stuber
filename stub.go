@@ -32,46 +32,46 @@ func (s Stub) Right() string {
 
 // InputData represents the input data of a gRPC request.
 type InputData struct {
-	IgnoreArrayOrder bool                   `json:"ignoreArrayOrder,omitempty"` // Whether to ignore the order of arrays in the input data.
-	Equals           map[string]interface{} `json:"equals"`                     // The data to match exactly.
-	Contains         map[string]interface{} `json:"contains"`                   // The data to match partially.
-	Matches          map[string]interface{} `json:"matches"`                    // The data to match using regular expressions.
+	IgnoreArrayOrder bool           `json:"ignoreArrayOrder,omitempty"` // Whether to ignore the order of arrays in the input data.
+	Equals           map[string]any `json:"equals"`                     // The data to match exactly.
+	Contains         map[string]any `json:"contains"`                   // The data to match partially.
+	Matches          map[string]any `json:"matches"`                    // The data to match using regular expressions.
 }
 
 // GetEquals returns the data to match exactly.
-func (i InputData) GetEquals() map[string]interface{} {
+func (i InputData) GetEquals() map[string]any {
 	return i.Equals
 }
 
 // GetContains returns the data to match partially.
-func (i InputData) GetContains() map[string]interface{} {
+func (i InputData) GetContains() map[string]any {
 	return i.Contains
 }
 
 // GetMatches returns the data to match using regular expressions.
-func (i InputData) GetMatches() map[string]interface{} {
+func (i InputData) GetMatches() map[string]any {
 	return i.Matches
 }
 
 // InputHeader represents the headers of a gRPC request.
 type InputHeader struct {
-	Equals   map[string]interface{} `json:"equals"`   // The headers to match exactly.
-	Contains map[string]interface{} `json:"contains"` // The headers to match partially.
-	Matches  map[string]interface{} `json:"matches"`  // The headers to match using regular expressions.
+	Equals   map[string]any `json:"equals"`   // The headers to match exactly.
+	Contains map[string]any `json:"contains"` // The headers to match partially.
+	Matches  map[string]any `json:"matches"`  // The headers to match using regular expressions.
 }
 
 // GetEquals returns the headers to match exactly.
-func (i InputHeader) GetEquals() map[string]interface{} {
+func (i InputHeader) GetEquals() map[string]any {
 	return i.Equals
 }
 
 // GetContains returns the headers to match partially.
-func (i InputHeader) GetContains() map[string]interface{} {
+func (i InputHeader) GetContains() map[string]any {
 	return i.Contains
 }
 
 // GetMatches returns the headers to match using regular expressions.
-func (i InputHeader) GetMatches() map[string]interface{} {
+func (i InputHeader) GetMatches() map[string]any {
 	return i.Matches
 }
 
@@ -82,8 +82,8 @@ func (i InputHeader) Len() int {
 
 // Output represents the output data of a gRPC response.
 type Output struct {
-	Headers map[string]string      `json:"headers"`        // The headers of the response.
-	Data    map[string]interface{} `json:"data"`           // The data of the response.
-	Error   string                 `json:"error"`          // The error message of the response.
-	Code    *codes.Code            `json:"code,omitempty"` // The status code of the response.
+	Headers map[string]string `json:"headers"`        // The headers of the response.
+	Data    map[string]any    `json:"data"`           // The data of the response.
+	Error   string            `json:"error"`          // The error message of the response.
+	Code    *codes.Code       `json:"code,omitempty"` // The status code of the response.
 }

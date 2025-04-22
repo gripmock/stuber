@@ -3,6 +3,7 @@ package stuber
 import (
 	"errors"
 	"iter"
+	"strings"
 	"sync"
 
 	"github.com/google/uuid"
@@ -106,7 +107,7 @@ func (s *storage) values() iter.Seq[Value] {
 // - iter.Seq[Value]: A sequence of matched Value items.
 // - error: An error if the left or right name is not found.
 func (s *storage) findAll(left, right string) (iter.Seq[Value], error) {
-	index, err := s.posByN(left, right)
+	indexes, err := s.posByPN(left, right)
 	if err != nil {
 		return nil, err
 	}
@@ -115,12 +116,61 @@ func (s *storage) findAll(left, right string) (iter.Seq[Value], error) {
 		s.mu.RLock()
 		defer s.mu.RUnlock()
 
-		for _, v := range s.items[index] {
-			if !yield(v) {
-				return
+		for _, index := range indexes {
+			for _, v := range s.items[index] {
+				if !yield(v) {
+					return
+				}
 			}
 		}
 	}, nil
+}
+
+// posByPN attempts to resolve UUIDs for a given left and right name pair.
+// It first tries to resolve the full left name with the right name, and then
+// attempts to resolve using a truncated version of the left name if necessary.
+//
+// Parameters:
+// - left: The left name for matching.
+// - right: The right name for matching.
+//
+// Returns:
+// - []uuid.UUID: A slice of resolved UUIDs.
+// - error: An error if no UUIDs were resolved.
+func (s *storage) posByPN(left, right string) ([]uuid.UUID, error) {
+	// Initialize a slice to store the resolved UUIDs.
+	var resolvedUUIDs []uuid.UUID
+
+	// Attempt to resolve the full left name with the right name.
+	uuid, err := s.posByN(left, right)
+	if err == nil {
+		// Append the resolved UUID to the slice.
+		resolvedUUIDs = append(resolvedUUIDs, uuid)
+	}
+
+	// Check for a potential truncation point in the left name.
+	if dotIndex := strings.LastIndex(left, "."); dotIndex != -1 {
+		truncatedLeft := left[dotIndex+1:]
+
+		// Attempt to resolve the truncated left name with the right name.
+		if uuid, err := s.posByN(truncatedLeft, right); err == nil {
+			// Append the resolved UUID to the slice.
+			resolvedUUIDs = append(resolvedUUIDs, uuid)
+		} else if errors.Is(err, ErrRightNotFound) && len(resolvedUUIDs) == 0 {
+			// Return an error if the right name was not found
+			// and no UUIDs were resolved.
+			return nil, err
+		}
+	}
+
+	// Return an error if no UUIDs were resolved.
+	if len(resolvedUUIDs) == 0 {
+		// Return the original error if we have it.
+		return nil, err
+	}
+
+	// Return the resolved UUIDs.
+	return resolvedUUIDs, nil
 }
 
 // findByID retrieves the Stub value associated with the given UUID from the

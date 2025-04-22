@@ -200,7 +200,7 @@ func (s *searcher) find(query Query) (*Result, error) {
 // - error: An error if the search fails.
 func (s *searcher) searchByID(query Query) (*Result, error) {
 	// Check if the given service and method are valid.
-	_, err := s.storage.posByN(query.Service, query.Method)
+	_, err := s.storage.posByPN(query.Service, query.Method)
 	if err != nil {
 		return nil, s.wrap(err)
 	}
@@ -314,13 +314,13 @@ func (s *searcher) iterAll() iter.Seq[*Stub] {
 	}
 }
 
-// castToValue converts a slice of *Stub values to a slice of Value interface{}.
+// castToValue converts a slice of *Stub values to a slice of Value any.
 //
 // Parameters:
 // - values: A slice of *Stub values to convert.
 //
 // Returns:
-// - A slice of Value interface{} containing the converted values.
+// - A slice of Value any containing the converted values.
 func (s *searcher) castToValue(values []*Stub) []Value {
 	result := make([]Value, len(values))
 	for i, v := range values {
