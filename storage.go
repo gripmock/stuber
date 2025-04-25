@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
+	"github.com/zeebo/xxh3"
 )
 
 // ErrLeftNotFound is returned when the left value is not found.
@@ -22,47 +23,35 @@ type Value interface {
 	Right() string
 }
 
-// storage is a struct that manages the storage of search results with optimized performance and memory usage.
+// storage is responsible for managing search results with enhanced
+// performance and memory efficiency. It supports concurrent access
+// through the use of a read-write mutex.
 //
 // Fields:
-// - mu: A mutex that is used to protect the storage from concurrent access.
-// - leftTotal and rightTotal: The total number of left and right values in the storage.
-// - lefts and rights: Maps of left and right values to their respective IDs.
-// - leftRights: A map that is used to store the pairing of left and right values.
-// - items: A map of left-right pair IDs to their respective items.
-// - itemsByID: A map of item IDs to their respective items.
+// - mu: Ensures safe concurrent access to the storage.
+// - lefts: A map that tracks unique left values by their hashed IDs.
+// - items: Stores items by a composite key of hashed left and right IDs.
+// - itemsByID: Provides quick access to items by their unique UUIDs.
 type storage struct {
-	mu         sync.RWMutex
-	leftTotal  uint64
-	rightTotal uint64
-	lefts      map[string]uint64
-	rights     map[string]uint64
-	leftRights map[[2]uint64]struct{}
-	items      map[uuid.UUID]map[uuid.UUID]Value
-	itemsByID  map[uuid.UUID]Value
-}
+	mu        sync.RWMutex
+	lefts     map[uint32]struct{}
+	items     map[uint64]map[uuid.UUID]Value
+	itemsByID map[uuid.UUID]Value
 
-// itemMapPool is a sync.Pool that is used to store and retrieve maps that
-// are used to store items in the storage.
-//
-// The New method of the sync.Pool is used to create a new map when the pool
-// is empty. The method returns a pointer to the newly created map.
-//
-//nolint:gochecknoglobals
-var itemMapPool = sync.Pool{
-	New: func() any {
-		return make(map[uuid.UUID]Value)
-	},
+	itemMapPool *sync.Pool
 }
 
 // newStorage creates a new instance of the storage struct.
 func newStorage() *storage {
 	return &storage{
-		lefts:      make(map[string]uint64),
-		rights:     make(map[string]uint64),
-		leftRights: make(map[[2]uint64]struct{}),
-		items:      make(map[uuid.UUID]map[uuid.UUID]Value),
-		itemsByID:  make(map[uuid.UUID]Value),
+		lefts:     make(map[uint32]struct{}),
+		items:     make(map[uint64]map[uuid.UUID]Value),
+		itemsByID: make(map[uuid.UUID]Value),
+		itemMapPool: &sync.Pool{
+			New: func() any {
+				return make(map[uuid.UUID]Value, 1)
+			},
+		},
 	}
 }
 
@@ -71,12 +60,8 @@ func (s *storage) clear() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.leftTotal = 0
-	s.rightTotal = 0
-	s.lefts = make(map[string]uint64)
-	s.rights = make(map[string]uint64)
-	s.leftRights = make(map[[2]uint64]struct{})
-	s.items = make(map[uuid.UUID]map[uuid.UUID]Value)
+	s.lefts = make(map[uint32]struct{})
+	s.items = make(map[uint64]map[uuid.UUID]Value)
 	s.itemsByID = make(map[uuid.UUID]Value)
 }
 
@@ -126,7 +111,7 @@ func (s *storage) findAll(left, right string) (iter.Seq[Value], error) {
 	}, nil
 }
 
-// posByPN attempts to resolve UUIDs for a given left and right name pair.
+// posByPN attempts to resolve IDs for a given left and right name pair.
 // It first tries to resolve the full left name with the right name, and then
 // attempts to resolve using a truncated version of the left name if necessary.
 //
@@ -135,17 +120,17 @@ func (s *storage) findAll(left, right string) (iter.Seq[Value], error) {
 // - right: The right name for matching.
 //
 // Returns:
-// - []uuid.UUID: A slice of resolved UUIDs.
-// - error: An error if no UUIDs were resolved.
-func (s *storage) posByPN(left, right string) ([]uuid.UUID, error) {
-	// Initialize a slice to store the resolved UUIDs.
-	var resolvedUUIDs []uuid.UUID
+// - [][2]uint64: A slice of resolved ID pairs.
+// - error: An error if no IDs were resolved.
+func (s *storage) posByPN(left, right string) ([]uint64, error) {
+	// Initialize a slice to store the resolved IDs.
+	var resolvedIDs []uint64
 
 	// Attempt to resolve the full left name with the right name.
-	uuid, err := s.posByN(left, right)
+	id, err := s.posByN(left, right)
 	if err == nil {
-		// Append the resolved UUID to the slice.
-		resolvedUUIDs = append(resolvedUUIDs, uuid)
+		// Append the resolved ID to the slice.
+		resolvedIDs = append(resolvedIDs, id)
 	}
 
 	// Check for a potential truncation point in the left name.
@@ -153,24 +138,24 @@ func (s *storage) posByPN(left, right string) ([]uuid.UUID, error) {
 		truncatedLeft := left[dotIndex+1:]
 
 		// Attempt to resolve the truncated left name with the right name.
-		if uuid, err := s.posByN(truncatedLeft, right); err == nil {
-			// Append the resolved UUID to the slice.
-			resolvedUUIDs = append(resolvedUUIDs, uuid)
-		} else if errors.Is(err, ErrRightNotFound) && len(resolvedUUIDs) == 0 {
+		if id, err := s.posByN(truncatedLeft, right); err == nil {
+			// Append the resolved ID to the slice.
+			resolvedIDs = append(resolvedIDs, id)
+		} else if errors.Is(err, ErrRightNotFound) && len(resolvedIDs) == 0 {
 			// Return an error if the right name was not found
-			// and no UUIDs were resolved.
+			// and no IDs were resolved.
 			return nil, err
 		}
 	}
 
-	// Return an error if no UUIDs were resolved.
-	if len(resolvedUUIDs) == 0 {
+	// Return an error if no IDs were resolved.
+	if len(resolvedIDs) == 0 {
 		// Return the original error if we have it.
 		return nil, err
 	}
 
-	// Return the resolved UUIDs.
-	return resolvedUUIDs, nil
+	// Return the resolved IDs.
+	return resolvedIDs, nil
 }
 
 // findByID retrieves the Stub value associated with the given UUID from the
@@ -220,32 +205,26 @@ func (s *storage) upsert(values ...Value) []uuid.UUID {
 
 	// Process each value to insert or update.
 	for i, v := range values {
-		// Retrieve or create IDs for the left and right names.
-		leftID := s.leftIDOrNew(v.Left())
-		rightID := s.rightIDOrNew(v.Right())
-
-		// Compute the composite index from the left and right IDs.
-		index := s.pos(leftID, rightID)
-
-		// Register the left-right pairing.
-		s.leftRights[[2]uint64{leftID, rightID}] = struct{}{}
+		leftID := s.id(v.Left())
+		index := s.pos(leftID, s.id(v.Right()))
 
 		// Initialize the map at the index if it doesn't exist.
 		if s.items[index] == nil {
-			if p := itemMapPool.Get(); p != nil {
+			if p := s.itemMapPool.Get(); p != nil {
 				s.items[index], _ = p.(map[uuid.UUID]Value)
 				// Clear any pre-existing entries.
 				for k := range s.items[index] {
 					delete(s.items[index], k)
 				}
 			} else {
-				s.items[index] = make(map[uuid.UUID]Value)
+				s.items[index] = make(map[uuid.UUID]Value, 1)
 			}
 		}
 
 		// Insert or update the value in the storage.
 		s.items[index][v.Key()] = v
 		s.itemsByID[v.Key()] = v
+		s.lefts[leftID] = struct{}{}
 
 		// Record the UUID of the processed value.
 		results[i] = v.Key()
@@ -261,147 +240,51 @@ func (s *storage) del(keys ...uuid.UUID) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	type posKey struct {
-		pos uuid.UUID
-		key uuid.UUID
-	}
-
-	toDelete := make([]posKey, 0, len(keys))
+	deleted := 0
 
 	for _, key := range keys {
 		if v, ok := s.itemsByID[key]; ok {
-			leftID := s.lefts[v.Left()]
-			rightID := s.rights[v.Right()]
-			pos := s.pos(leftID, rightID)
-			toDelete = append(toDelete, posKey{pos, key})
-		}
-	}
+			pos := s.pos(s.id(v.Left()), s.id(v.Right()))
 
-	deleted := 0
-	posMap := make(map[uuid.UUID][]uuid.UUID, len(toDelete))
+			if m, exists := s.items[pos]; exists {
+				delete(m, key)
+				delete(s.itemsByID, key)
 
-	for _, pk := range toDelete {
-		posMap[pk.pos] = append(posMap[pk.pos], pk.key)
-	}
+				deleted++
 
-	for pos, ids := range posMap {
-		m := s.items[pos]
-		for _, id := range ids {
-			delete(m, id)
-			delete(s.itemsByID, id)
-
-			deleted++
-		}
-
-		if len(m) == 0 {
-			itemMapPool.Put(m)
-			delete(s.items, pos)
+				if len(m) == 0 {
+					s.itemMapPool.Put(m)
+					delete(s.items, pos)
+				}
+			}
 		}
 	}
 
 	return deleted
 }
 
-// leftID retrieves the ID associated with the given left name.
-// It returns the ID if found, or an error if the left name does not exist.
-func (s *storage) leftID(leftName string) (uint64, error) {
+func (s *storage) id(value string) uint32 {
+	return uint32(xxh3.HashString(value)) //nolint:gosec
+}
+
+func (s *storage) pos(a, b uint32) uint64 {
+	return uint64(a)<<32 | uint64(b)
+}
+
+func (s *storage) posByN(leftName, rightName string) (uint64, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	id, ok := s.lefts[leftName]
-	if !ok {
+	leftID := s.id(leftName)
+	if _, exists := s.lefts[leftID]; !exists {
 		return 0, ErrLeftNotFound
 	}
 
-	return id, nil
-}
+	key := s.pos(leftID, s.id(rightName))
 
-// leftIDOrNew returns the ID of the given left name.
-// If the ID does not exist, it will be created.
-func (s *storage) leftIDOrNew(name string) uint64 {
-	if id, exists := s.lefts[name]; exists {
-		return id
-	}
-
-	s.leftTotal++
-	s.lefts[name] = s.leftTotal
-
-	return s.leftTotal
-}
-
-// rightID returns the ID of the given right name.
-// If the ID does not exist, ErrRightNotFound will be returned.
-func (s *storage) rightID(rightName string) (uint64, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	id, ok := s.rights[rightName]
-	if !ok {
+	if _, exists := s.items[key]; !exists {
 		return 0, ErrRightNotFound
 	}
 
-	return id, nil
-}
-
-// rightIDOrNew returns the ID of the given right name.
-// If the ID does not exist, it will be created.
-func (s *storage) rightIDOrNew(name string) uint64 {
-	if id, exists := s.rights[name]; exists {
-		return id
-	}
-
-	s.rightTotal++
-	s.rights[name] = s.rightTotal
-
-	return s.rightTotal
-}
-
-// posByN creates a UUID from the given left and right names.
-// The resulting UUID is 128 bits long, with the left ID in the first 64 bits,
-// and the right ID in the second 64 bits.
-func (s *storage) posByN(leftName, rightName string) (uuid.UUID, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	leftID, leftExists := s.lefts[leftName]
-	if !leftExists {
-		return uuid.Nil, ErrLeftNotFound
-	}
-
-	rightID, rightExists := s.rights[rightName]
-	if !rightExists {
-		return uuid.Nil, ErrRightNotFound
-	}
-
-	key := [2]uint64{leftID, rightID}
-	if _, exists := s.leftRights[key]; !exists {
-		return uuid.Nil, ErrRightNotFound
-	}
-
-	return s.pos(leftID, rightID), nil
-}
-
-// pos creates a UUID from the given left and right IDs.
-// The resulting UUID is 128 bits long, with the left ID in the first 64 bits,
-// and the right ID in the second 64 bits.
-func (s *storage) pos(leftID, rightID uint64) uuid.UUID {
-	//nolint:mnd
-	return uuid.UUID{
-		byte(leftID >> 56),
-		byte(leftID >> 48),
-		byte(leftID >> 40),
-		byte(leftID >> 32),
-		byte(leftID >> 24),
-		byte(leftID >> 16),
-		byte(leftID >> 8),
-		byte(leftID),
-		byte(rightID >> 56),
-		byte(rightID >> 48),
-		byte(rightID >> 40),
-		byte(rightID >> 32),
-		byte(rightID >> 24),
-		byte(rightID >> 16),
-		byte(rightID >> 8),
-		byte(rightID),
-	}
+	return key, nil
 }

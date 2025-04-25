@@ -511,15 +511,15 @@ func TestDelete(t *testing.T) {
 	require.Nil(t, s.FindByID(id3))
 
 	all, err = s.FindBy("Greeter1", "SayHello1")
-	require.NoError(t, err)
+	require.ErrorIs(t, err, stuber.ErrMethodNotFound)
 	require.Empty(t, all)
 
 	all, err = s.FindBy("Greeter2", "SayHello2")
-	require.NoError(t, err)
+	require.ErrorIs(t, err, stuber.ErrMethodNotFound)
 	require.Empty(t, all)
 
 	all, err = s.FindBy("Greeter3", "SayHello3")
-	require.NoError(t, err)
+	require.ErrorIs(t, err, stuber.ErrMethodNotFound)
 	require.Empty(t, all)
 }
 

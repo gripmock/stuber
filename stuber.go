@@ -53,6 +53,14 @@ func (b *Budgerigar) PutMany(values ...*Stub) []uuid.UUID {
 	return b.searcher.upsert(values...)
 }
 
+// Insert the updates into the searcher.
+// Returns the keys of the inserted or updated values.
+//
+// Parameters:
+// - values: The Stub values to insert or update.
+//
+// Returns:
+// - []uuid.UUID: The keys of the inserted or updated values.
 func (b *Budgerigar) UpdateMany(values ...*Stub) []uuid.UUID {
 	// Extract the values that have a non-nil key.
 	// These values will be updated in the searcher.
@@ -65,14 +73,6 @@ func (b *Budgerigar) UpdateMany(values ...*Stub) []uuid.UUID {
 		}
 	}
 
-	// Insert the updates into the searcher.
-	// Returns the keys of the inserted or updated values.
-	//
-	// Parameters:
-	// - values: The Stub values to insert or update.
-	//
-	// Returns:
-	// - []uuid.UUID: The keys of the inserted or updated values.
 	return b.searcher.upsert(updates...)
 }
 
