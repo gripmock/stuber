@@ -152,18 +152,13 @@ func (s *searcher) used() []*Stub {
 // Returns:
 // - []*Stub: The Stub values that have not been used by the searcher.
 func (s *searcher) unused() []*Stub {
-	usedSet := make(map[uuid.UUID]struct{})
-
 	s.mu.RLock()
-	for id := range s.stubUsed {
-		usedSet[id] = struct{}{}
-	}
-	s.mu.RUnlock()
+	defer s.mu.RUnlock()
 
 	unused := make([]*Stub, 0)
 
 	for stub := range s.iterAll() {
-		if _, exists := usedSet[stub.ID]; !exists {
+		if _, exists := s.stubUsed[stub.ID]; !exists {
 			unused = append(unused, stub)
 		}
 	}

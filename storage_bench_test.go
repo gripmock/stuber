@@ -100,8 +100,8 @@ func BenchmarkStoragePosByN(b *testing.B) {
 func BenchmarkStoragePos(b *testing.B) {
 	s := newStorage()
 
-	left := s.leftIDOrNew("A")
-	right := s.rightIDOrNew("B")
+	left := s.id("A")
+	right := s.id("B")
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -119,7 +119,7 @@ func BenchmarkStorageLeftID(b *testing.B) {
 	b.ResetTimer()
 
 	for range b.N {
-		_, _ = s.leftID("A")
+		_ = s.id("A")
 	}
 }
 
@@ -130,7 +130,7 @@ func BenchmarkStorageLeftIDOrNew(b *testing.B) {
 	b.ResetTimer()
 
 	for range b.N {
-		_ = s.leftIDOrNew(uuid.NewString())
+		_ = s.id(uuid.NewString())
 	}
 }
 
@@ -142,7 +142,7 @@ func BenchmarkStorageRightID(b *testing.B) {
 	b.ResetTimer()
 
 	for range b.N {
-		_, _ = s.rightID("B")
+		_ = s.id("B")
 	}
 }
 
@@ -153,6 +153,6 @@ func BenchmarkStorageRightIDOrNew(b *testing.B) {
 	b.ResetTimer()
 
 	for range b.N {
-		_ = s.rightIDOrNew(uuid.NewString())
+		_ = s.id(uuid.NewString())
 	}
 }
