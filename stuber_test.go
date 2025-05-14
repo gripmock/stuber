@@ -398,6 +398,46 @@ func TestBudgerigar_SearchWithHeaders_Similar(t *testing.T) {
 	}, r.Similar().Output.Data)
 }
 
+func TestResult_MatchesRegexInt(t *testing.T) {
+	s := stuber.NewBudgerigar(features.New(stuber.MethodTitle))
+
+	require.Empty(t, s.Unused())
+
+	s.PutMany(
+		&stuber.Stub{
+			ID:      uuid.New(),
+			Service: "Gripmock",
+			Method:  "ApiInfo",
+			Input: stuber.InputData{Matches: map[string]interface{}{
+				"vint64": "^100[1-2]{2}\\d{0,3}$",
+			}},
+			Output: stuber.Output{Data: map[string]interface{}{
+				"name":    "Gripmock",
+				"version": "1.0",
+			}},
+		},
+	)
+
+	require.Len(t, s.Unused(), 1)
+
+	payload := `{"data":{"vint64":"10012000"},"method":"ApiInfo","service":"Gripmock"}`
+
+	req := httptest.NewRequest(http.MethodPost, "/api/stubs/search", bytes.NewReader([]byte(payload)))
+	q, err := stuber.NewQuery(req)
+	require.NoError(t, err)
+
+	r, err := s.FindByQuery(q)
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	require.NotNil(t, r.Found())
+	require.Nil(t, r.Similar())
+
+	require.Equal(t, map[string]interface{}{
+		"name":    "Gripmock",
+		"version": "1.0",
+	}, r.Found().Output.Data)
+}
+
 func TestResult_Similar(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New(stuber.MethodTitle))
 
