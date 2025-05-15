@@ -1,6 +1,8 @@
 package stuber
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 )
@@ -86,4 +88,5 @@ type Output struct {
 	Data    map[string]any    `json:"data"`           // The data of the response.
 	Error   string            `json:"error"`          // The error message of the response.
 	Code    *codes.Code       `json:"code,omitempty"` // The status code of the response.
+	Delay   time.Duration     `json:"delay"`          // The delay of the response or error.
 }
