@@ -1,6 +1,8 @@
 package stuber
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 )
@@ -82,8 +84,9 @@ func (i InputHeader) Len() int {
 
 // Output represents the output data of a gRPC response.
 type Output struct {
-	Headers map[string]string `json:"headers"`        // The headers of the response.
-	Data    map[string]any    `json:"data"`           // The data of the response.
-	Error   string            `json:"error"`          // The error message of the response.
-	Code    *codes.Code       `json:"code,omitempty"` // The status code of the response.
+	Headers map[string]string `json:"headers"`         // The headers of the response.
+	Data    map[string]any    `json:"data"`            // The data of the response.
+	Error   string            `json:"error"`           // The error message of the response.
+	Code    *codes.Code       `json:"code,omitempty"`  // The status code of the response.
+	Delay   time.Duration     `json:"delay,omitempty"` // The delay of the response or error.
 }
