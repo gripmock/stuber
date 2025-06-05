@@ -5,7 +5,7 @@ go 1.24
 require (
 	github.com/bavix/features v1.0.3
 	github.com/google/uuid v1.6.0
-	github.com/gripmock/deeply v1.3.2
+	github.com/gripmock/deeply v1.3.3
 	github.com/stretchr/testify v1.10.0
 	github.com/zeebo/xxh3 v1.0.2
 	golang.org/x/text v0.25.0
@@ -16,7 +16,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.10 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/spf13/cast v1.8.0 // indirect
+	github.com/spf13/cast v1.9.2 // indirect
 	golang.org/x/sys v0.33.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
