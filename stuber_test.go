@@ -8,6 +8,7 @@ import (
 
 	"github.com/bavix/features"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/gripmock/stuber"
@@ -588,4 +589,57 @@ func TestBudgerigar_Clear(t *testing.T) {
 	s.Clear()
 
 	require.Empty(t, s.All())
+}
+
+func TestBudgerigar_FindByQuery_FoundWithPriority(t *testing.T) {
+	t.Parallel()
+
+	s := stuber.NewBudgerigar(features.New(stuber.MethodTitle))
+
+	s.PutMany(
+		&stuber.Stub{
+			ID:       uuid.New(),
+			Service:  "Service",
+			Method:   "Method",
+			Input:    stuber.InputData{Contains: map[string]any{"id": "1"}},
+			Output:   stuber.Output{Data: map[string]any{"result": "fail"}},
+			Priority: -1,
+		},
+		&stuber.Stub{
+			ID:       uuid.New(),
+			Service:  "Service",
+			Method:   "Method",
+			Input:    stuber.InputData{Matches: map[string]any{"id": "\\d+"}},
+			Output:   stuber.Output{Data: map[string]any{"result": "fail"}},
+			Priority: 0,
+		},
+		&stuber.Stub{
+			ID:       uuid.New(),
+			Service:  "Service",
+			Method:   "Method",
+			Input:    stuber.InputData{Equals: map[string]any{"id": "1"}},
+			Output:   stuber.Output{Data: map[string]any{"result": "success"}},
+			Priority: 10,
+		},
+		&stuber.Stub{
+			ID:       uuid.New(),
+			Service:  "Service",
+			Method:   "Method",
+			Input:    stuber.InputData{Equals: map[string]any{"id": "1"}},
+			Output:   stuber.Output{Data: map[string]any{"result": "fail"}},
+			Priority: 1,
+		},
+	)
+
+	r, err := s.FindByQuery(stuber.Query{
+		Service: "Service",
+		Method:  "Method",
+		Data:    map[string]any{"id": "1"},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, r.Found())
+	require.Nil(t, r.Similar())
+
+	assert.Equal(t, "success", r.Found().Output.Data["result"])
 }

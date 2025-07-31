@@ -9,12 +9,13 @@ import (
 
 // Stub represents a gRPC service method and its associated data.
 type Stub struct {
-	ID      uuid.UUID   `json:"id"`      // The unique identifier of the stub.
-	Service string      `json:"service"` // The name of the service.
-	Method  string      `json:"method"`  // The name of the method.
-	Headers InputHeader `json:"headers"` // The headers of the request.
-	Input   InputData   `json:"input"`   // The input data of the request.
-	Output  Output      `json:"output"`  // The output data of the response.
+	ID       uuid.UUID   `json:"id"`       // The unique identifier of the stub.
+	Service  string      `json:"service"`  // The name of the service.
+	Method   string      `json:"method"`   // The name of the method.
+	Headers  InputHeader `json:"headers"`  // The headers of the request.
+	Input    InputData   `json:"input"`    // The input data of the request.
+	Output   Output      `json:"output"`   // The output data of the response.
+	Priority int         `json:"priority"` // In which order the answer will be applied if there are multiple matches.
 }
 
 // Key returns the unique identifier of the stub.

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"iter"
 	"maps"
+	"slices"
 	"sync"
 
 	"github.com/google/uuid"
@@ -234,12 +235,7 @@ func (s *searcher) search(query Query) (*Result, error) {
 		return nil, s.wrap(err)
 	}
 
-	for v := range seq {
-		stub, ok := v.(*Stub)
-		if !ok {
-			continue
-		}
-
+	for _, stub := range s.sortedByPrioritySubs(seq) {
 		current := rankMatch(query, stub)
 
 		if current > similarRank {
@@ -262,6 +258,33 @@ func (s *searcher) search(query Query) (*Result, error) {
 	}
 
 	return nil, ErrStubNotFound
+}
+
+func (s *searcher) sortedByPrioritySubs(seq iter.Seq[Value]) []*Stub {
+	stubs := make([]*Stub, 0, len(s.storage.itemsByID))
+
+	for v := range seq {
+		stub, ok := v.(*Stub)
+		if !ok {
+			continue
+		}
+
+		stubs = append(stubs, stub)
+	}
+
+	slices.SortFunc(stubs, func(a *Stub, b *Stub) int {
+		if a.Priority < b.Priority {
+			return 1
+		}
+
+		if a.Priority > b.Priority {
+			return -1
+		}
+
+		return 0
+	})
+
+	return stubs
 }
 
 // mark marks the given Stub value as used in the searcher.
