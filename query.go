@@ -9,15 +9,17 @@ import (
 )
 
 const (
+	// RequestInternalFlag is a feature flag for internal requests.
 	RequestInternalFlag features.Flag = iota
 )
 
+// Query represents a query for finding stubs.
 type Query struct {
-	ID      *uuid.UUID     `json:"id,omitempty"`
-	Service string         `json:"service"`
-	Method  string         `json:"method"`
-	Headers map[string]any `json:"headers"`
-	Data    map[string]any `json:"data"`
+	ID      *uuid.UUID     `json:"id,omitempty"` // The unique identifier of the stub (optional).
+	Service string         `json:"service"`      // The service name to search for.
+	Method  string         `json:"method"`       // The method name to search for.
+	Headers map[string]any `json:"headers"`      // The headers to match.
+	Data    map[string]any `json:"data"`         // The data to match.
 
 	toggles features.Toggles
 }
@@ -32,6 +34,14 @@ func toggles(r *http.Request) features.Toggles {
 	return features.New(flags...)
 }
 
+// NewQuery creates a new Query from an HTTP request.
+//
+// Parameters:
+// - r: The HTTP request to parse.
+//
+// Returns:
+// - Query: The parsed query.
+// - error: An error if the request body cannot be parsed.
 func NewQuery(r *http.Request) (Query, error) {
 	q := Query{
 		toggles: toggles(r),
@@ -40,13 +50,15 @@ func NewQuery(r *http.Request) (Query, error) {
 	decoder := json.NewDecoder(r.Body)
 	decoder.UseNumber()
 
-	if err := decoder.Decode(&q); err != nil {
+	err := decoder.Decode(&q)
+	if err != nil {
 		return q, err
 	}
 
 	return q, nil
 }
 
+// RequestInternal returns true if the query is marked as internal.
 func (q Query) RequestInternal() bool {
 	return q.toggles.Has(RequestInternalFlag)
 }

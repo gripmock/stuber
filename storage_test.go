@@ -27,6 +27,10 @@ func (t testItem) Right() string {
 	return t.right
 }
 
+func (t testItem) Score() int {
+	return t.value
+}
+
 func TestAdd(t *testing.T) {
 	s := newStorage()
 	s.upsert(
@@ -194,4 +198,174 @@ func TestDelete(t *testing.T) {
 	require.Equal(t, 0, s.del(id1, id2, id3))
 	require.Empty(t, s.items)
 	require.Empty(t, s.itemsByID)
+}
+
+func TestFindAllSorted(t *testing.T) {
+	s := newStorage()
+
+	// Create items with different scores
+	item1 := &testItem{id: uuid.New(), left: "Greeter1", right: "SayHello1", value: 10}
+	item2 := &testItem{id: uuid.New(), left: "Greeter1", right: "SayHello1", value: 30}
+	item3 := &testItem{id: uuid.New(), left: "Greeter1", right: "SayHello1", value: 20}
+	item4 := &testItem{id: uuid.New(), left: "Greeter2", right: "SayHello2", value: 50}
+
+	s.upsert(item1, item2, item3, item4)
+
+	collect := func(seq iter.Seq[Value]) []Value {
+		var res []Value
+		for v := range seq {
+			res = append(res, v)
+		}
+
+		return res
+	}
+
+	t.Run("sorted by score descending", func(t *testing.T) {
+		seq, err := s.findAll("Greeter1", "SayHello1")
+		require.NoError(t, err)
+
+		results := collect(seq)
+		require.Len(t, results, 3)
+
+		// Should be sorted by score in descending order: 30, 20, 10
+		require.Equal(t, 30, results[0].Score())
+		require.Equal(t, 20, results[1].Score())
+		require.Equal(t, 10, results[2].Score())
+	})
+
+	t.Run("single item", func(t *testing.T) {
+		seq, err := s.findAll("Greeter2", "SayHello2")
+		require.NoError(t, err)
+
+		results := collect(seq)
+		require.Len(t, results, 1)
+		require.Equal(t, 50, results[0].Score())
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		_, err := s.findAll("Greeter3", "SayHello3")
+		require.ErrorIs(t, err, ErrLeftNotFound)
+	})
+
+	t.Run("empty result", func(t *testing.T) {
+		_, err := s.findAll("Greeter1", "SayHello2")
+		require.ErrorIs(t, err, ErrRightNotFound)
+	})
+}
+
+func TestClear(t *testing.T) {
+	s := newStorage()
+
+	// Add some items
+	s.upsert(
+		&testItem{id: uuid.New(), left: "Greeter1", right: "SayHello1"},
+		&testItem{id: uuid.New(), left: "Greeter2", right: "SayHello2"},
+	)
+
+	require.Len(t, s.items, 2)
+	require.Len(t, s.itemsByID, 2)
+	require.Len(t, s.lefts, 2)
+
+	// Clear storage
+	s.clear()
+
+	require.Empty(t, s.items)
+	require.Empty(t, s.itemsByID)
+	require.Empty(t, s.lefts)
+}
+
+func TestStorageValues(t *testing.T) {
+	s := newStorage()
+
+	// Initially empty
+	var count int
+	for range s.values() {
+		count++
+	}
+	require.Equal(t, 0, count)
+
+	// Add items
+	item1 := &testItem{id: uuid.New(), left: "A", right: "B"}
+	item2 := &testItem{id: uuid.New(), left: "C", right: "D"}
+	s.upsert(item1, item2)
+
+	// Count items
+	count = 0
+	for range s.values() {
+		count++
+	}
+	require.Equal(t, 2, count)
+
+	// Test early return in iterator
+	count = 0
+	for range s.values() {
+		count++
+		if count == 1 {
+			break
+		}
+	}
+	require.Equal(t, 1, count)
+}
+
+func TestStorageFindByIDs(t *testing.T) {
+	s := newStorage()
+
+	// Add items
+	item1 := &testItem{id: uuid.New(), left: "A", right: "B"}
+	item2 := &testItem{id: uuid.New(), left: "C", right: "D"}
+	item3 := &testItem{id: uuid.New(), left: "E", right: "F"}
+	s.upsert(item1, item2, item3)
+
+	// Test finding by IDs
+	ids := []uuid.UUID{item1.id, item2.id}
+	var found []Value
+	for v := range s.findByIDs(func(yield func(uuid.UUID) bool) {
+		for _, id := range ids {
+			if !yield(id) {
+				return
+			}
+		}
+	}) {
+		found = append(found, v)
+	}
+
+	require.Len(t, found, 2)
+
+	// Test finding by non-existent IDs
+	var notFound []Value
+	for v := range s.findByIDs(func(yield func(uuid.UUID) bool) {
+		yield(uuid.New())
+		yield(uuid.New())
+	}) {
+		notFound = append(notFound, v)
+	}
+
+	require.Empty(t, notFound)
+}
+
+func TestStorageFindAll_EmptyResult(t *testing.T) {
+	s := newStorage()
+
+	// Add items
+	s.upsert(&testItem{id: uuid.New(), left: "A", right: "B"})
+
+	// Test finding with non-existent service/method
+	_, err := s.findAll("NonExistent", "Method")
+	require.ErrorIs(t, err, ErrLeftNotFound)
+}
+
+func TestStorageUpsert_Empty(t *testing.T) {
+	s := newStorage()
+
+	// Test upsert with empty slice
+	result := s.upsert()
+	require.Nil(t, result)
+}
+
+func TestStorageDel_NonExistent(t *testing.T) {
+	s := newStorage()
+
+	// Test deleting non-existent items
+	deleted := s.del(uuid.New(), uuid.New())
+	require.Equal(t, 0, deleted)
 }

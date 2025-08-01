@@ -53,14 +53,14 @@ func (b *Budgerigar) PutMany(values ...*Stub) []uuid.UUID {
 	return b.searcher.upsert(values...)
 }
 
-// Insert the updates into the searcher.
-// Returns the keys of the inserted or updated values.
+// UpdateMany updates the given Stub values in the Budgerigar. Only Stub values
+// with non-nil keys are updated.
 //
 // Parameters:
-// - values: The Stub values to insert or update.
+// - values: The Stub values to update.
 //
 // Returns:
-// - []uuid.UUID: The keys of the inserted or updated values.
+// - []uuid.UUID: The keys of the updated values.
 func (b *Budgerigar) UpdateMany(values ...*Stub) []uuid.UUID {
 	// Extract the values that have a non-nil key.
 	// These values will be updated in the searcher.
@@ -84,14 +84,6 @@ func (b *Budgerigar) UpdateMany(values ...*Stub) []uuid.UUID {
 // Returns:
 // - int: The number of Stub values that were successfully deleted.
 func (b *Budgerigar) DeleteByID(ids ...uuid.UUID) int {
-	// Delete the Stub values with the given IDs from the searcher.
-	// Returns the number of Stub values that were successfully deleted.
-	//
-	// Parameters:
-	// - ids: The UUIDs of the Stub values to delete.
-	//
-	// Returns:
-	// - int: The number of Stub values that were successfully deleted.
 	return b.searcher.del(ids...)
 }
 
@@ -103,13 +95,6 @@ func (b *Budgerigar) DeleteByID(ids ...uuid.UUID) int {
 // Returns:
 // - *Stub: The Stub value associated with the given ID, or nil if not found.
 func (b *Budgerigar) FindByID(id uuid.UUID) *Stub {
-	// FindByID retrieves the Stub value associated with the given ID from the Budgerigar's searcher.
-	//
-	// Parameters:
-	// - id: The UUID of the Stub value to retrieve.
-	//
-	// Returns:
-	// - *Stub: The Stub value associated with the given ID, or nil if not found.
 	return b.searcher.findByID(id)
 }
 
@@ -129,27 +114,11 @@ func (b *Budgerigar) FindByQuery(query Query) (*Result, error) {
 			String(query.Method)
 	}
 
-	// Find the Stub value associated with the given Query from the Budgerigar's searcher.
-	//
-	// Parameters:
-	// - query: The Query used to search for a Stub value.
-	//
-	// Returns:
-	// - *Result: The Result containing the found Stub value (if any), or nil.
-	// - error: An error if the search fails.
 	return b.searcher.find(query)
 }
 
 // FindBy retrieves all Stub values that match the given service and method
-// from the Budgerigar's searcher.
-//
-// Parameters:
-// - service: The service field used to search for Stub values.
-// - method: The method field used to search for Stub values.
-//
-// Returns:
-// - []*Stub: The Stub values that match the given service and method, or nil if not found.
-// - error: An error if the search fails.
+// from the Budgerigar's searcher, sorted by priority score in descending order.
 func (b *Budgerigar) FindBy(service, method string) ([]*Stub, error) {
 	return b.searcher.findBy(service, method)
 }

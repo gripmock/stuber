@@ -12,10 +12,10 @@ type Stub struct {
 	ID       uuid.UUID   `json:"id"`       // The unique identifier of the stub.
 	Service  string      `json:"service"`  // The name of the service.
 	Method   string      `json:"method"`   // The name of the method.
+	Priority int         `json:"priority"` // The priority score of the stub.
 	Headers  InputHeader `json:"headers"`  // The headers of the request.
 	Input    InputData   `json:"input"`    // The input data of the request.
 	Output   Output      `json:"output"`   // The output data of the response.
-	Priority int         `json:"priority"` // In which order the answer will be applied if there are multiple matches.
 }
 
 // Key returns the unique identifier of the stub.
@@ -31,6 +31,11 @@ func (s Stub) Left() string {
 // Right returns the method name of the stub.
 func (s Stub) Right() string {
 	return s.Method
+}
+
+// Score returns the priority score of the stub.
+func (s Stub) Score() int {
+	return s.Priority
 }
 
 // InputData represents the input data of a gRPC request.

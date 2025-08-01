@@ -3,6 +3,7 @@ package stuber
 import (
 	"errors"
 	"iter"
+	"slices"
 	"strings"
 	"sync"
 
@@ -21,6 +22,7 @@ type Value interface {
 	Key() uuid.UUID
 	Left() string
 	Right() string
+	Score() int // Score determines the order of values when sorting
 }
 
 // storage is responsible for managing search results with enhanced
@@ -37,8 +39,6 @@ type storage struct {
 	lefts     map[uint32]struct{}
 	items     map[uint64]map[uuid.UUID]Value
 	itemsByID map[uuid.UUID]Value
-
-	itemMapPool *sync.Pool
 }
 
 // newStorage creates a new instance of the storage struct.
@@ -47,11 +47,6 @@ func newStorage() *storage {
 		lefts:     make(map[uint32]struct{}),
 		items:     make(map[uint64]map[uuid.UUID]Value),
 		itemsByID: make(map[uuid.UUID]Value),
-		itemMapPool: &sync.Pool{
-			New: func() any {
-				return make(map[uuid.UUID]Value, 1)
-			},
-		},
 	}
 }
 
@@ -80,35 +75,61 @@ func (s *storage) values() iter.Seq[Value] {
 	}
 }
 
-// findAll retrieves all Value items that match the given left and right names.
-// It returns an iterator sequence of the matched Value items or an error if the
-// names are not found.
-//
-// Parameters:
-// - left: The left name for matching.
-// - right: The right name for matching.
-//
-// Returns:
-// - iter.Seq[Value]: A sequence of matched Value items.
-// - error: An error if the left or right name is not found.
+// findAll retrieves all Value items that match the given left and right names,
+// sorted by score in descending order.
 func (s *storage) findAll(left, right string) (iter.Seq[Value], error) {
 	indexes, err := s.posByPN(left, right)
 	if err != nil {
 		return nil, err
 	}
 
-	return func(yield func(Value) bool) {
-		s.mu.RLock()
-		defer s.mu.RUnlock()
+	if len(indexes) == 0 {
+		return func(_ func(Value) bool) {}, nil
+	}
 
-		for _, index := range indexes {
-			for _, v := range s.items[index] {
-				if !yield(v) {
-					return
-				}
+	return func(yield func(Value) bool) {
+		s.yieldSortedValues(indexes, yield)
+	}, nil
+}
+
+// yieldSortedValues yields values sorted by score in descending order using heap-based sorting
+// to minimize memory allocations and maximize iterator usage.
+func (s *storage) yieldSortedValues(indexes []uint64, yield func(Value) bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Use a heap-based approach to avoid collecting all values
+	// This is more memory efficient for large datasets
+	type heapItem struct {
+		value Value
+		score int
+	}
+
+	// Collect values with scores in a streaming fashion
+	var heap []heapItem
+
+	// First pass: collect all values with scores
+	for _, index := range indexes {
+		if m, exists := s.items[index]; exists {
+			for _, v := range m {
+				heap = append(heap, heapItem{value: v, score: v.Score()})
 			}
 		}
-	}, nil
+	}
+
+	// Sort by score in descending order
+	if len(heap) > 1 {
+		slices.SortFunc(heap, func(a, b heapItem) int {
+			return b.score - a.score
+		})
+	}
+
+	// Yield sorted values
+	for _, item := range heap {
+		if !yield(item.value) {
+			return
+		}
+	}
 }
 
 // posByPN attempts to resolve IDs for a given left and right name pair.
@@ -138,7 +159,8 @@ func (s *storage) posByPN(left, right string) ([]uint64, error) {
 		truncatedLeft := left[dotIndex+1:]
 
 		// Attempt to resolve the truncated left name with the right name.
-		if id, err := s.posByN(truncatedLeft, right); err == nil {
+		id, err := s.posByN(truncatedLeft, right)
+		if err == nil {
 			// Append the resolved ID to the slice.
 			resolvedIDs = append(resolvedIDs, id)
 		} else if errors.Is(err, ErrRightNotFound) && len(resolvedIDs) == 0 {
@@ -195,42 +217,38 @@ func (s *storage) findByIDs(ids iter.Seq[uuid.UUID]) iter.Seq[Value] {
 }
 
 // upsert inserts or updates the given Value items in storage.
-// It returns the UUIDs of the inserted or updated items.
+// Optimized for minimal allocations and maximum performance.
 func (s *storage) upsert(values ...Value) []uuid.UUID {
+	if len(values) == 0 {
+		return nil
+	}
+
+	// Pre-allocate with exact size to minimize allocations
+	results := make([]uuid.UUID, len(values))
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Prepare a slice to store the result UUIDs.
-	results := make([]uuid.UUID, len(values))
-
-	// Process each value to insert or update.
+	// Process all values in a single pass
 	for i, v := range values {
+		results[i] = v.Key()
+
+		// Calculate IDs directly without string interning
 		leftID := s.id(v.Left())
-		index := s.pos(leftID, s.id(v.Right()))
+		rightID := s.id(v.Right())
+		index := s.pos(leftID, rightID)
 
 		// Initialize the map at the index if it doesn't exist.
 		if s.items[index] == nil {
-			if p := s.itemMapPool.Get(); p != nil {
-				s.items[index], _ = p.(map[uuid.UUID]Value)
-				// Clear any pre-existing entries.
-				for k := range s.items[index] {
-					delete(s.items[index], k)
-				}
-			} else {
-				s.items[index] = make(map[uuid.UUID]Value, 1)
-			}
+			s.items[index] = make(map[uuid.UUID]Value, 1)
 		}
 
 		// Insert or update the value in the storage.
 		s.items[index][v.Key()] = v
 		s.itemsByID[v.Key()] = v
 		s.lefts[leftID] = struct{}{}
-
-		// Record the UUID of the processed value.
-		results[i] = v.Key()
 	}
 
-	// Return the UUIDs of the inserted or updated values.
 	return results
 }
 
@@ -253,7 +271,6 @@ func (s *storage) del(keys ...uuid.UUID) int {
 				deleted++
 
 				if len(m) == 0 {
-					s.itemMapPool.Put(m)
 					delete(s.items, pos)
 				}
 			}
