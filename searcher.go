@@ -96,15 +96,7 @@ func (s *searcher) findByID(id uuid.UUID) *Stub {
 }
 
 // findBy retrieves all Stub values that match the given service and method
-// from the searcher.
-//
-// Parameters:
-// - service: The service field used to search for Stub values.
-// - method: The method field used to search for Stub values.
-//
-// Returns:
-// - []*Stub: The Stub values that match the given service and method, or nil if not found.
-// - error: An error if the search fails.
+// from the searcher, sorted by score in descending order.
 func (s *searcher) findBy(service, method string) ([]*Stub, error) {
 	seq, err := s.storage.findAll(service, method)
 	if err != nil {

@@ -63,6 +63,38 @@ func TestFindBy(t *testing.T) {
 	require.Len(t, s.All(), 7)
 }
 
+func TestFindBySorted(t *testing.T) {
+	s := stuber.NewBudgerigar(features.New())
+
+	// Create stubs with different priorities
+	stub1 := &stuber.Stub{ID: uuid.New(), Service: "Greeter1", Method: "SayHello1", Priority: 10}
+	stub2 := &stuber.Stub{ID: uuid.New(), Service: "Greeter1", Method: "SayHello1", Priority: 30}
+	stub3 := &stuber.Stub{ID: uuid.New(), Service: "Greeter1", Method: "SayHello1", Priority: 20}
+	stub4 := &stuber.Stub{ID: uuid.New(), Service: "Greeter2", Method: "SayHello2", Priority: 50}
+
+	s.PutMany(stub1, stub2, stub3, stub4)
+
+	// Test sorted results
+	results, err := s.FindBy("Greeter1", "SayHello1")
+	require.NoError(t, err)
+	require.Len(t, results, 3)
+
+	// Should be sorted by priority in descending order: 30, 20, 10
+	require.Equal(t, 30, results[0].Priority)
+	require.Equal(t, 20, results[1].Priority)
+	require.Equal(t, 10, results[2].Priority)
+
+	// Test single result
+	results, err = s.FindBy("Greeter2", "SayHello2")
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	require.Equal(t, 50, results[0].Priority)
+
+	// Test not found
+	_, err = s.FindBy("Greeter3", "SayHello3")
+	require.ErrorIs(t, err, stuber.ErrServiceNotFound)
+}
+
 func TestPutMany_FixID(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New())
 
@@ -588,4 +620,143 @@ func TestBudgerigar_Clear(t *testing.T) {
 	s.Clear()
 
 	require.Empty(t, s.All())
+}
+
+func TestBudgerigar_FindByQuery_FoundWithPriority(t *testing.T) {
+	t.Parallel()
+
+	s := stuber.NewBudgerigar(features.New(stuber.MethodTitle))
+
+	s.PutMany(
+		&stuber.Stub{
+			ID:       uuid.New(),
+			Service:  "Service",
+			Method:   "Method",
+			Input:    stuber.InputData{Contains: map[string]any{"id": "1"}},
+			Output:   stuber.Output{Data: map[string]any{"result": "fail"}},
+			Priority: -1,
+		},
+		&stuber.Stub{
+			ID:       uuid.New(),
+			Service:  "Service",
+			Method:   "Method",
+			Input:    stuber.InputData{Matches: map[string]any{"id": "\\d+"}},
+			Output:   stuber.Output{Data: map[string]any{"result": "fail"}},
+			Priority: 0,
+		},
+		&stuber.Stub{
+			ID:       uuid.New(),
+			Service:  "Service",
+			Method:   "Method",
+			Input:    stuber.InputData{Equals: map[string]any{"id": "1"}},
+			Output:   stuber.Output{Data: map[string]any{"result": "success"}},
+			Priority: 10,
+		},
+		&stuber.Stub{
+			ID:       uuid.New(),
+			Service:  "Service",
+			Method:   "Method",
+			Input:    stuber.InputData{Equals: map[string]any{"id": "1"}},
+			Output:   stuber.Output{Data: map[string]any{"result": "fail"}},
+			Priority: 1,
+		},
+	)
+
+	r, err := s.FindByQuery(stuber.Query{
+		Service: "Service",
+		Method:  "Method",
+		Data:    map[string]any{"id": "1"},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, r.Found())
+	require.Nil(t, r.Similar())
+
+	require.Equal(t, "success", r.Found().Output.Data["result"])
+}
+
+func TestBudgerigar_Used(t *testing.T) {
+	s := stuber.NewBudgerigar(features.New())
+
+	// Initially no used stubs
+	require.Empty(t, s.Used())
+
+	// Add some stubs
+	stub1 := &stuber.Stub{ID: uuid.New(), Service: "Service1", Method: "Method1"}
+	stub2 := &stuber.Stub{ID: uuid.New(), Service: "Service2", Method: "Method2"}
+	s.PutMany(stub1, stub2)
+
+	// Still no used stubs
+	require.Empty(t, s.Used())
+
+	// Use a stub by finding it
+	_, err := s.FindByQuery(stuber.Query{
+		Service: "Service1",
+		Method:  "Method1",
+	})
+	require.NoError(t, err)
+
+	// Now we have one used stub
+	used := s.Used()
+	require.Len(t, used, 1)
+	require.Equal(t, stub1.ID, used[0].ID)
+}
+
+func TestBudgerigar_FindByQuery_WithID(t *testing.T) {
+	s := stuber.NewBudgerigar(features.New())
+
+	stubID := uuid.New()
+	stub := &stuber.Stub{
+		ID:      stubID,
+		Service: "Service",
+		Method:  "Method",
+		Output:  stuber.Output{Data: map[string]any{"result": "success"}},
+	}
+	s.PutMany(stub)
+
+	// Test finding by ID
+	result, err := s.FindByQuery(stuber.Query{
+		ID:      &stubID,
+		Service: "Service",
+		Method:  "Method",
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, result.Found())
+	require.Equal(t, stubID, result.Found().ID)
+	require.Equal(t, "success", result.Found().Output.Data["result"])
+
+	// Test finding by non-existent ID
+	nonExistentID := uuid.New()
+	_, err = s.FindByQuery(stuber.Query{
+		ID:      &nonExistentID,
+		Service: "Service",
+		Method:  "Method",
+	})
+	require.Error(t, err)
+}
+
+func TestBudgerigar_FindByQuery_InternalRequest(t *testing.T) {
+	s := stuber.NewBudgerigar(features.New())
+
+	stub := &stuber.Stub{
+		ID:      uuid.New(),
+		Service: "Service",
+		Method:  "Method",
+		Output:  stuber.Output{Data: map[string]any{"result": "success"}},
+	}
+	s.PutMany(stub)
+
+	// Test internal request (should not mark as used)
+	// We can't directly test internal requests through the public API
+	// but we can test that normal requests mark stubs as used
+	result, err := s.FindByQuery(stuber.Query{
+		Service: "Service",
+		Method:  "Method",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result.Found())
+
+	// Should be marked as used for normal requests
+	require.Len(t, s.Used(), 1)
 }

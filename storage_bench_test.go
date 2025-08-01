@@ -156,3 +156,50 @@ func BenchmarkStorageRightIDOrNew(b *testing.B) {
 		_ = s.id(uuid.NewString())
 	}
 }
+
+func BenchmarkStorageFindAllSorted(b *testing.B) {
+	items := make([]Value, 0, b.N)
+	for i := range b.N {
+		items = append(items, &testItem{
+			id:    uuid.New(),
+			left:  "A",
+			right: "B",
+			value: i % 100, // Different scores for sorting
+		})
+	}
+
+	s := newStorage()
+	s.upsert(items...)
+
+	var all iter.Seq[Value]
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for range b.N {
+		all, _ = s.findAll("A", "B")
+		for range all { //nolint:revive
+		}
+	}
+}
+
+func BenchmarkStorageUpsert(b *testing.B) {
+	items := make([]Value, 0, b.N)
+	for i := range b.N {
+		items = append(items, &testItem{
+			id:    uuid.New(),
+			left:  "A",
+			right: "B",
+			value: i % 100,
+		})
+	}
+
+	s := newStorage()
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for range b.N {
+		s.upsert(items...)
+	}
+}
