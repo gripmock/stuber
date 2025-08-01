@@ -51,11 +51,8 @@ func NewQuery(r *http.Request) (Query, error) {
 	decoder.UseNumber()
 
 	err := decoder.Decode(&q)
-	if err != nil {
-		return q, err
-	}
 
-	return q, nil
+	return q, err
 }
 
 // RequestInternal returns true if the query is marked as internal.

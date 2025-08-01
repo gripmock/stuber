@@ -2,6 +2,7 @@ package stuber //nolint:testpackage
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"testing"
@@ -27,12 +28,12 @@ func TestQuery_RequestInternal(t *testing.T) {
 
 func TestToggles(t *testing.T) {
 	// Test without header
-	req, _ := http.NewRequest("POST", "/", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/", nil)
 	togglesResult := toggles(req)
 	require.False(t, togglesResult.Has(RequestInternalFlag))
 
 	// Test with header
-	req, _ = http.NewRequest("POST", "/", nil)
+	req, _ = http.NewRequestWithContext(context.Background(), http.MethodPost, "/", nil)
 	req.Header.Set("X-Gripmock-Requestinternal", "true")
 	togglesResult = toggles(req)
 	require.True(t, togglesResult.Has(RequestInternalFlag))
@@ -48,7 +49,8 @@ func TestNewQuery_WithBody(t *testing.T) {
 
 	body, err := json.Marshal(data)
 	require.NoError(t, err)
-	req, _ := http.NewRequest("POST", "/", bytes.NewBuffer(body))
+
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/", bytes.NewBuffer(body))
 
 	q, err := NewQuery(req)
 	require.NoError(t, err)
@@ -68,7 +70,8 @@ func TestNewQuery_WithID(t *testing.T) {
 
 	body, err := json.Marshal(data)
 	require.NoError(t, err)
-	req, _ := http.NewRequest("POST", "/", bytes.NewBuffer(body))
+
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/", bytes.NewBuffer(body))
 
 	q, err := NewQuery(req)
 	require.NoError(t, err)
@@ -78,7 +81,7 @@ func TestNewQuery_WithID(t *testing.T) {
 }
 
 func TestNewQuery_InvalidJSON(t *testing.T) {
-	req, _ := http.NewRequest("POST", "/", bytes.NewBufferString("invalid json"))
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/", bytes.NewBufferString("invalid json"))
 
 	_, err := NewQuery(req)
 	require.Error(t, err)

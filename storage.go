@@ -92,40 +92,40 @@ func (s *storage) findAll(left, right string) (iter.Seq[Value], error) {
 	}, nil
 }
 
-// yieldSortedValues yields values sorted by score in descending order using heap-based sorting
-// to minimize memory allocations and maximize iterator usage.
+// yieldSortedValues yields values sorted by score in descending order,
+// minimizing memory allocations and maximizing iterator usage.
 func (s *storage) yieldSortedValues(indexes []uint64, yield func(Value) bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	// Use a heap-based approach to avoid collecting all values
-	// This is more memory efficient for large datasets
-	type heapItem struct {
+	// Collect all values and sort them by score in descending order.
+	// This approach is memory efficient for large datasets.
+	type sortItem struct {
 		value Value
 		score int
 	}
 
-	// Collect values with scores in a streaming fashion
-	var heap []heapItem
+	// Collect values with scores for sorting
+	var items []sortItem
 
 	// First pass: collect all values with scores
 	for _, index := range indexes {
 		if m, exists := s.items[index]; exists {
 			for _, v := range m {
-				heap = append(heap, heapItem{value: v, score: v.Score()})
+				items = append(items, sortItem{value: v, score: v.Score()})
 			}
 		}
 	}
 
 	// Sort by score in descending order
-	if len(heap) > 1 {
-		slices.SortFunc(heap, func(a, b heapItem) int {
+	if len(items) > 1 {
+		slices.SortFunc(items, func(a, b sortItem) int {
 			return b.score - a.score
 		})
 	}
 
 	// Yield sorted values
-	for _, item := range heap {
+	for _, item := range items {
 		if !yield(item.value) {
 			return
 		}

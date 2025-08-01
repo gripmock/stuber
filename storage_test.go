@@ -282,6 +282,7 @@ func TestStorageValues(t *testing.T) {
 	for range s.values() {
 		count++
 	}
+
 	require.Equal(t, 0, count)
 
 	// Add items
@@ -294,6 +295,7 @@ func TestStorageValues(t *testing.T) {
 	for range s.values() {
 		count++
 	}
+
 	require.Equal(t, 2, count)
 
 	// Test early return in iterator
@@ -304,6 +306,7 @@ func TestStorageValues(t *testing.T) {
 			break
 		}
 	}
+
 	require.Equal(t, 1, count)
 }
 
@@ -318,7 +321,8 @@ func TestStorageFindByIDs(t *testing.T) {
 
 	// Test finding by IDs
 	ids := []uuid.UUID{item1.id, item2.id}
-	var found []Value
+
+	found := make([]Value, 0, len(ids))
 	for v := range s.findByIDs(func(yield func(uuid.UUID) bool) {
 		for _, id := range ids {
 			if !yield(id) {
@@ -332,7 +336,7 @@ func TestStorageFindByIDs(t *testing.T) {
 	require.Len(t, found, 2)
 
 	// Test finding by non-existent IDs
-	var notFound []Value
+	notFound := make([]Value, 0, 2)
 	for v := range s.findByIDs(func(yield func(uuid.UUID) bool) {
 		yield(uuid.New())
 		yield(uuid.New())
