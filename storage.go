@@ -83,10 +83,6 @@ func (s *storage) findAll(left, right string) (iter.Seq[Value], error) {
 		return nil, err
 	}
 
-	if len(indexes) == 0 {
-		return func(_ func(Value) bool) {}, nil
-	}
-
 	return func(yield func(Value) bool) {
 		s.yieldSortedValues(indexes, yield)
 	}, nil
