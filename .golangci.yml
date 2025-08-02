@@ -7,6 +7,7 @@ linters:
     - paralleltest
     - varnamelen
     - wrapcheck
+    - wsl
   settings:
     depguard:
       rules:
@@ -18,6 +19,10 @@ linters:
             - google.golang.org
     lll:
       line-length: 140
+    wsl_v5:
+      allow-first-in-block: true
+      allow-whole-block: false
+      branch-max-lines: 2
   exclusions:
     generated: lax
     presets:

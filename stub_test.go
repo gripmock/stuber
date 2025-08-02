@@ -60,6 +60,7 @@ func TestOutput_Fields(t *testing.T) {
 	output := Output{
 		Headers: map[string]string{"header1": "value1"},
 		Data:    map[string]any{"data1": "value1"},
+		Stream:  []any{"message1", "message2", "message3"},
 		Error:   "test error",
 		Code:    &code,
 		Delay:   100,
@@ -67,7 +68,20 @@ func TestOutput_Fields(t *testing.T) {
 
 	require.Equal(t, map[string]string{"header1": "value1"}, output.Headers)
 	require.Equal(t, map[string]any{"data1": "value1"}, output.Data)
+	require.Equal(t, []any{"message1", "message2", "message3"}, output.Stream)
 	require.Equal(t, "test error", output.Error)
 	require.Equal(t, &code, output.Code)
 	require.Equal(t, 100, int(output.Delay))
+}
+
+func TestOutput_Fields_EmptyStream(t *testing.T) {
+	output := Output{
+		Headers: map[string]string{"header1": "value1"},
+		Data:    map[string]any{"data1": "value1"},
+		// Stream field is not set (should be nil)
+	}
+
+	require.Equal(t, map[string]string{"header1": "value1"}, output.Headers)
+	require.Equal(t, map[string]any{"data1": "value1"}, output.Data)
+	require.Nil(t, output.Stream)
 }
