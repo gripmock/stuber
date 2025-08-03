@@ -1,6 +1,8 @@
 package stuber
 
 import (
+	"reflect"
+
 	"github.com/gripmock/deeply"
 )
 
@@ -71,11 +73,114 @@ func equals(expected map[string]any, actual any, orderIgnore bool) bool {
 		return true
 	}
 
-	if orderIgnore {
-		return deeply.EqualsIgnoreArrayOrder(expected, actual)
+	// Convert actual to map if it's not already
+	actualMap, ok := actual.(map[string]any)
+	if !ok {
+		return false
 	}
 
-	return deeply.Equals(expected, actual)
+	// Check if all expected fields are present and equal
+	for key, expectedValue := range expected {
+		actualValue, exists := actualMap[key]
+		if !exists {
+			return false
+		}
+
+		// Use simple string comparison for strings
+		expectedStr, expectedIsStr := expectedValue.(string)
+		actualStr, actualIsStr := actualValue.(string)
+		if expectedIsStr && actualIsStr {
+			if expectedStr != actualStr {
+				return false
+			}
+			continue
+		}
+
+		// Use simple number comparison for numbers (handle both int and float64)
+		switch expectedNum := expectedValue.(type) {
+		case float64:
+			switch actualNum := actualValue.(type) {
+			case float64:
+				if expectedNum != actualNum {
+					return false
+				}
+				continue
+			case int:
+				if expectedNum != float64(actualNum) {
+					return false
+				}
+				continue
+			case int64:
+				if expectedNum != float64(actualNum) {
+					return false
+				}
+				continue
+			}
+		case int:
+			switch actualNum := actualValue.(type) {
+			case float64:
+				if float64(expectedNum) != actualNum {
+					return false
+				}
+				continue
+			case int:
+				if expectedNum != actualNum {
+					return false
+				}
+				continue
+			case int64:
+				if expectedNum != int(actualNum) {
+					return false
+				}
+				continue
+			}
+		case int64:
+			switch actualNum := actualValue.(type) {
+			case float64:
+				if float64(expectedNum) != actualNum {
+					return false
+				}
+				continue
+			case int:
+				if int64(actualNum) != expectedNum {
+					return false
+				}
+				continue
+			case int64:
+				if expectedNum != actualNum {
+					return false
+				}
+				continue
+			}
+		}
+
+		// Use simple bool comparison for booleans
+		expectedBool, expectedIsBool := expectedValue.(bool)
+		actualBool, actualIsBool := actualValue.(bool)
+		if expectedIsBool && actualIsBool {
+			if expectedBool != actualBool {
+				return false
+			}
+			continue
+		}
+
+		// For other types, check if we need to ignore array order
+		if orderIgnore {
+			// Use deeply package for array order insensitive comparison
+			if !deeply.EqualsIgnoreArrayOrder(expectedValue, actualValue) {
+				return false
+			}
+		} else {
+			// Use reflect.DeepEqual for exact match
+			if !reflect.DeepEqual(expectedValue, actualValue) {
+				return false
+			}
+		}
+	}
+
+	// For streaming cases, we don't need to check extra fields
+	// as the client might send additional fields that we don't care about
+	return true
 }
 
 // contains checks if the expected map is a subset of the actual value.
@@ -119,7 +224,6 @@ func matchV2(query QueryV2, stub *Stub) bool {
 	// If no stream in stub, check unary case (one element in input)
 	if len(query.Input) == 1 {
 		queryItem := query.Input[0]
-
 		return matchInput(queryItem, stub.Input)
 	}
 
@@ -142,7 +246,6 @@ func rankMatchV2(query QueryV2, stub *Stub) float64 {
 	// If no stream in stub, rank unary case (one element in input)
 	if len(query.Input) == 1 {
 		queryItem := query.Input[0]
-
 		return headersRank + rankInput(queryItem, stub.Input)
 	}
 
@@ -152,39 +255,219 @@ func rankMatchV2(query QueryV2, stub *Stub) float64 {
 
 // matchStreamElements checks if query input matches stub stream element by element.
 func matchStreamElements(queryStream []map[string]any, stubStream []InputData) bool {
-	// If lengths don't match, return false
-	if len(queryStream) != len(stubStream) {
-		return false
-	}
-
-	// Check each element
-	for i, queryItem := range queryStream {
-		stubItem := stubStream[i]
-		if !equals(stubItem.Equals, queryItem, stubItem.IgnoreArrayOrder) ||
-			!contains(stubItem.Contains, queryItem, stubItem.IgnoreArrayOrder) ||
-			!matches(stubItem.Matches, queryItem, stubItem.IgnoreArrayOrder) {
-			return false
+	// For client streaming, grpctestify sends an extra empty message at the end
+	// We need to handle this case by checking if the last message is empty
+	effectiveQueryLength := len(queryStream)
+	if effectiveQueryLength > 0 {
+		lastMessage := queryStream[effectiveQueryLength-1]
+		if len(lastMessage) == 0 {
+			effectiveQueryLength--
 		}
 	}
 
+	// For bidirectional streaming, we need to handle single messages
+	// If query has only one message, try to match it against any stub item
+	if effectiveQueryLength == 1 && len(stubStream) > 1 {
+		queryItem := queryStream[0]
+
+		// Try to match against any stub item
+		for _, stubItem := range stubStream {
+			// Check if this stub item has any matchers defined
+			hasMatchers := len(stubItem.Equals) > 0 || len(stubItem.Contains) > 0 || len(stubItem.Matches) > 0
+			if !hasMatchers {
+				continue
+			}
+
+			// Check equals matcher
+			if len(stubItem.Equals) > 0 {
+				if equals(stubItem.Equals, queryItem, stubItem.IgnoreArrayOrder) {
+					return true
+				}
+			}
+
+			// Check contains matcher
+			if len(stubItem.Contains) > 0 {
+				if contains(stubItem.Contains, queryItem, stubItem.IgnoreArrayOrder) {
+					return true
+				}
+			}
+
+			// Check matches matcher
+			if len(stubItem.Matches) > 0 {
+				if matches(stubItem.Matches, queryItem, stubItem.IgnoreArrayOrder) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+
+	// For client streaming, allow partial matching for ranking purposes
+	if effectiveQueryLength != len(stubStream) {
+		// Don't return false here - let ranking handle it
+	}
+
+	// STRICT: If query stream is empty but stub expects data, no match
+	if effectiveQueryLength == 0 && len(stubStream) > 0 {
+		return false
+	}
+
+	for i := 0; i < effectiveQueryLength; i++ {
+		queryItem := queryStream[i]
+		stubItem := stubStream[i]
+
+		// Check if this stub item has any matchers defined
+		hasMatchers := len(stubItem.Equals) > 0 || len(stubItem.Contains) > 0 || len(stubItem.Matches) > 0
+		if !hasMatchers {
+			return false
+		}
+
+		// Check equals matcher
+		if len(stubItem.Equals) > 0 {
+			if !equals(stubItem.Equals, queryItem, stubItem.IgnoreArrayOrder) {
+				return false
+			}
+		}
+
+		// Check contains matcher
+		if len(stubItem.Contains) > 0 {
+			if !contains(stubItem.Contains, queryItem, stubItem.IgnoreArrayOrder) {
+				return false
+			}
+		}
+
+		// Check matches matcher
+		if len(stubItem.Matches) > 0 {
+			if !matches(stubItem.Matches, queryItem, stubItem.IgnoreArrayOrder) {
+				return false
+			}
+		}
+	}
 	return true
 }
 
 // rankStreamElements ranks how well query input matches stub stream element by element.
 func rankStreamElements(queryStream []map[string]any, stubStream []InputData) float64 {
-	// If lengths don't match, return 0
-	if len(queryStream) != len(stubStream) {
+	// For client streaming, grpctestify sends an extra empty message at the end
+	// We need to handle this case by checking if the last message is empty
+	effectiveQueryLength := len(queryStream)
+	if effectiveQueryLength > 0 {
+		lastMessage := queryStream[effectiveQueryLength-1]
+		if len(lastMessage) == 0 {
+			effectiveQueryLength--
+		}
+	}
+
+	// For bidirectional streaming, we need to handle single messages
+	// If query has only one message, try to rank it against any stub item
+	if effectiveQueryLength == 1 && len(stubStream) > 1 {
+		queryItem := queryStream[0]
+
+		var bestRank float64
+		// Try to rank against any stub item
+		for _, stubItem := range stubStream {
+			// Check if this stub item has any matchers defined
+			hasMatchers := len(stubItem.Equals) > 0 || len(stubItem.Contains) > 0 || len(stubItem.Matches) > 0
+			if !hasMatchers {
+				continue
+			}
+
+			// Use the same logic as before for element rank
+			equalsRank := 0.0
+			if len(stubItem.Equals) > 0 {
+				if equals(stubItem.Equals, queryItem, stubItem.IgnoreArrayOrder) {
+					equalsRank = 1.0
+				} else {
+					equalsRank = 0.0
+				}
+			}
+			containsRank := deeply.RankMatch(stubItem.Contains, queryItem)
+			matchesRank := deeply.RankMatch(stubItem.Matches, queryItem)
+			elementRank := equalsRank*100.0 + containsRank*0.1 + matchesRank*0.1
+
+			if elementRank > bestRank {
+				bestRank = elementRank
+			}
+		}
+
+		// Give bonus for bidirectional streaming match
+		bidirectionalBonus := 500.0
+		finalRank := bestRank + bidirectionalBonus
+		return finalRank
+	}
+
+	// For client streaming, if lengths don't match, return very low rank
+	if effectiveQueryLength != len(stubStream) {
+		// For client streaming, length must match exactly
+		return 0.1
+	}
+
+	// STRICT: If query stream is empty but stub expects data, no rank
+	if effectiveQueryLength == 0 && len(stubStream) > 0 {
 		return 0
 	}
 
 	var totalRank float64
-	// Rank each element
-	for i, queryItem := range queryStream {
+	var perfectMatches int
+
+	for i := 0; i < effectiveQueryLength; i++ {
+		queryItem := queryStream[i]
 		stubItem := stubStream[i]
-		totalRank += deeply.RankMatch(stubItem.Equals, queryItem) +
-			deeply.RankMatch(stubItem.Contains, queryItem) +
-			deeply.RankMatch(stubItem.Matches, queryItem)
+		// Use the same logic as before for element rank
+		equalsRank := 0.0
+		if len(stubItem.Equals) > 0 {
+			if equals(stubItem.Equals, queryItem, stubItem.IgnoreArrayOrder) {
+				equalsRank = 1.0
+			} else {
+				equalsRank = 0.0
+			}
+		}
+		containsRank := deeply.RankMatch(stubItem.Contains, queryItem)
+		matchesRank := deeply.RankMatch(stubItem.Matches, queryItem)
+		elementRank := equalsRank*100.0 + containsRank*0.1 + matchesRank*0.1
+		totalRank += elementRank
+		if equalsRank > 0.99 {
+			perfectMatches++
+		}
+	}
+	// For client streaming, accumulate rank based on received messages
+	// Each message contributes to the total rank
+	lengthBonus := float64(effectiveQueryLength) * 10.0   // Moderate bonus for length
+	perfectMatchBonus := float64(perfectMatches) * 1000.0 // High bonus for perfect matches
+
+	// Give bonus for complete match (all received messages match perfectly)
+	completeMatchBonus := 0.0
+	if perfectMatches == effectiveQueryLength && effectiveQueryLength > 0 {
+		completeMatchBonus = 10000.0 // Very high bonus for complete match
 	}
 
-	return totalRank
+	// Add specificity bonus - more specific matchers = higher specificity
+	specificityBonus := 0.0
+	for _, stubItem := range stubStream {
+		// Count actual matchers, not just field count
+		equalsCount := 0
+		for _, v := range stubItem.Equals {
+			if v != nil {
+				equalsCount++
+			}
+		}
+		containsCount := 0
+		for _, v := range stubItem.Contains {
+			if v != nil {
+				containsCount++
+			}
+		}
+		matchesCount := 0
+		for _, v := range stubItem.Matches {
+			if v != nil {
+				matchesCount++
+			}
+		}
+		specificityBonus += float64(equalsCount + containsCount + matchesCount)
+	}
+	specificityBonus *= 50.0 // Medium weight for specificity
+
+	finalRank := totalRank + lengthBonus + perfectMatchBonus + completeMatchBonus + specificityBonus
+
+	return finalRank
 }

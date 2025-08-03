@@ -35,11 +35,9 @@ func (s *Stub) IsServerStream() bool {
 }
 
 // IsBidirectional returns true if this stub can handle bidirectional streaming.
-// For bidirectional streaming, the stub should have Input data and Output.Stream data.
-// Note: In bidirectional streaming, each message is treated as a separate unary request.
-// This is essentially the same as server streaming, so we return the same result.
+// For bidirectional streaming, the stub should have Stream data (for input matching) and Output.Stream data (for output).
 func (s *Stub) IsBidirectional() bool {
-	return s.IsUnary() && s.IsServerStream()
+	return s.IsClientStream() && s.IsServerStream()
 }
 
 // Key returns the unique identifier of the stub.
