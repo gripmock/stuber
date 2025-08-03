@@ -363,7 +363,7 @@ func TestDeleteV2(t *testing.T) {
 	s.DeleteByID(stub.ID)
 
 	// Verify stub is deleted
-	require.Len(t, s.All(), 0)
+	require.Empty(t, s.All())
 	require.Nil(t, s.FindByID(stub.ID))
 }
 
@@ -383,7 +383,7 @@ func TestBudgerigar_ClearV2(t *testing.T) {
 	s.Clear()
 
 	// Verify all stubs are cleared
-	require.Len(t, s.All(), 0)
+	require.Empty(t, s.All())
 	require.Nil(t, s.FindByID(stub1.ID))
 	require.Nil(t, s.FindByID(stub2.ID))
 }
@@ -446,7 +446,7 @@ func TestBudgerigar_UsedV2(t *testing.T) {
 
 	// Initially no stubs are used
 	used := s.Used()
-	require.Len(t, used, 0)
+	require.Empty(t, used)
 
 	// Use one stub
 	query := stuber.QueryV2{
@@ -628,7 +628,7 @@ func TestV2StorageFunctions(t *testing.T) {
 	// Test clear function
 	s.Clear()
 	all = s.All()
-	require.Len(t, all, 0)
+	require.Empty(t, all)
 }
 
 func TestV2MatcherFunctions(t *testing.T) {

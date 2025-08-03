@@ -367,7 +367,7 @@ func BenchmarkRankMatchStream(b *testing.B) {
 	}
 }
 
-// BenchmarkQueryV2Unary measures the performance of V2 unary requests
+// BenchmarkQueryV2Unary measures the performance of V2 unary requests.
 func BenchmarkQueryV2Unary(b *testing.B) {
 	budgerigar := stuber.NewBudgerigar(features.New())
 
@@ -395,7 +395,7 @@ func BenchmarkQueryV2Unary(b *testing.B) {
 	}
 }
 
-// BenchmarkQueryV2Stream measures the performance of V2 stream requests
+// BenchmarkQueryV2Stream measures the performance of V2 stream requests.
 func BenchmarkQueryV2Stream(b *testing.B) {
 	budgerigar := stuber.NewBudgerigar(features.New())
 

@@ -55,7 +55,7 @@ func rankHeaders(queryHeaders map[string]any, stubHeaders InputHeader) float64 {
 		deeply.RankMatch(stubHeaders.Matches, queryHeaders)
 }
 
-// rankInput ranks query data against stub input
+// rankInput ranks query data against stub input.
 func rankInput(queryData map[string]any, stubInput InputData) float64 {
 	return deeply.RankMatch(stubInput.Equals, queryData) +
 		deeply.RankMatch(stubInput.Contains, queryData) +
@@ -150,7 +150,7 @@ func rankMatchV2(query QueryV2, stub *Stub) float64 {
 	return headersRank
 }
 
-// matchStreamElements checks if query input matches stub stream element by element
+// matchStreamElements checks if query input matches stub stream element by element.
 func matchStreamElements(queryStream []map[string]any, stubStream []InputData) bool {
 	// If lengths don't match, return false
 	if len(queryStream) != len(stubStream) {
@@ -170,7 +170,7 @@ func matchStreamElements(queryStream []map[string]any, stubStream []InputData) b
 	return true
 }
 
-// rankStreamElements ranks how well query input matches stub stream element by element
+// rankStreamElements ranks how well query input matches stub stream element by element.
 func rankStreamElements(queryStream []map[string]any, stubStream []InputData) float64 {
 	// If lengths don't match, return 0
 	if len(queryStream) != len(stubStream) {

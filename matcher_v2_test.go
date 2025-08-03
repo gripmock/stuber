@@ -249,7 +249,7 @@ func TestV2MultipleStreamsNoStubStream(t *testing.T) {
 	}
 }
 
-// TestV2Priority - tests priorities in V2
+// TestV2Priority - tests priorities in V2.
 func TestV2Priority(t *testing.T) {
 	stub1 := &stuber.Stub{
 		Service:  "test",

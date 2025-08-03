@@ -193,7 +193,7 @@ func (br *BidiResult) Next(messageData map[string]any) (*Stub, error) {
 
 // canStubMatchPattern checks if a stub could potentially match the pattern
 // based on the current message index and available stream data
-func (br *BidiResult) canStubMatchPattern(stub *Stub, messageData map[string]any) bool {
+func (br *BidiResult) canStubMatchPattern(stub *Stub, _ map[string]any) bool {
 	// For client streaming stubs, check if we have enough stream data
 	if stub.IsClientStream() {
 		return br.messageIndex < len(stub.Stream)
@@ -251,14 +251,14 @@ func (br *BidiResult) matchInputData(inputData InputData, messageData map[string
 	// Check Contains - avoid creating temporary maps
 	if len(inputData.Contains) > 0 {
 		for key, expectedValue := range inputData.Contains {
-			if actualValue, exists := messageData[key]; !exists {
+			actualValue, exists := messageData[key]
+			if !exists {
 				return false
-			} else {
-				// Create minimal map for contains check
-				tempMap := map[string]any{key: expectedValue}
-				if !contains(tempMap, actualValue, false) {
-					return false
-				}
+			}
+			// Create minimal map for contains check
+			tempMap := map[string]any{key: expectedValue}
+			if !contains(tempMap, actualValue, false) {
+				return false
 			}
 		}
 	}
@@ -266,14 +266,14 @@ func (br *BidiResult) matchInputData(inputData InputData, messageData map[string
 	// Check Matches - avoid creating temporary maps
 	if len(inputData.Matches) > 0 {
 		for key, expectedValue := range inputData.Matches {
-			if actualValue, exists := messageData[key]; !exists {
+			actualValue, exists := messageData[key]
+			if !exists {
 				return false
-			} else {
-				// Create minimal map for matches check
-				tempMap := map[string]any{key: expectedValue}
-				if !matches(tempMap, actualValue, false) {
-					return false
-				}
+			}
+			// Create minimal map for matches check
+			tempMap := map[string]any{key: expectedValue}
+			if !matches(tempMap, actualValue, false) {
+				return false
 			}
 		}
 	}
@@ -362,6 +362,7 @@ func deepEqual(a, b any) bool {
 					return false
 				}
 			}
+
 			return true
 		}
 	}
@@ -377,6 +378,7 @@ func deepEqual(a, b any) bool {
 					return false
 				}
 			}
+
 			return true
 		}
 	}
