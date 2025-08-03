@@ -598,7 +598,7 @@ func (s *searcher) searchByID(query Query) (*Result, error) {
 // - *Result: The Result containing the found Stub value (if any), or nil.
 // - error: An error if the search fails.
 func (s *searcher) search(query Query) (*Result, error) {
-	return s.searchCommon(query.Service, query.Method, 
+	return s.searchCommon(query.Service, query.Method,
 		func(stub *Stub) bool { return match(query, stub) },
 		func(stub *Stub) float64 { return rankMatch(query, stub) },
 		func(id uuid.UUID) { s.mark(query, id) })
