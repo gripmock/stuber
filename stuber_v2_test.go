@@ -67,7 +67,7 @@ func TestFindByV2(t *testing.T) {
 func TestFindBySortedV2(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New())
 
-	// Create stubs with different priorities
+	// Verify that FindBy returns stubs sorted by priority in descending order
 	stub1 := &stuber.Stub{ID: uuid.New(), Service: "Greeter1", Method: "SayHello1", Priority: 10}
 	stub2 := &stuber.Stub{ID: uuid.New(), Service: "Greeter1", Method: "SayHello1", Priority: 30}
 	stub3 := &stuber.Stub{ID: uuid.New(), Service: "Greeter1", Method: "SayHello1", Priority: 20}
