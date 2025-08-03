@@ -99,7 +99,7 @@ func TestFindBySortedV2(t *testing.T) {
 func TestPutMany_FixIDV2(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New())
 
-	// Create stubs without IDs
+	// Verify that PutMany assigns IDs to stubs that are created without them
 	stub1 := &stuber.Stub{Service: "Greeter1", Method: "SayHello1"}
 	stub2 := &stuber.Stub{Service: "Greeter2", Method: "SayHello2"}
 
