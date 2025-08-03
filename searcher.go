@@ -486,6 +486,62 @@ func (s *searcher) unused() []*Stub {
 	return unused
 }
 
+// searchCommon is a common search function that can be used by both search and searchV2
+func (s *searcher) searchCommon(service, method string, matchFunc func(*Stub) bool, rankFunc func(*Stub) float64, markFunc func(uuid.UUID)) (*Result, error) {
+	var (
+		found       *Stub
+		foundRank   float64
+		similar     *Stub
+		similarRank float64
+	)
+
+	seq, err := s.storage.findAll(service, method)
+	if err != nil {
+		return nil, s.wrap(err)
+	}
+
+	// Collect all stubs first for stable sorting
+	stubs := make([]*Stub, 0)
+	for v := range seq {
+		stub, ok := v.(*Stub)
+		if !ok {
+			continue
+		}
+		stubs = append(stubs, stub)
+	}
+
+	// Sort stubs by ID for stable ordering when ranks are equal
+	sortStubsByID(stubs)
+
+	// Process stubs in sorted order
+	for _, stub := range stubs {
+		current := rankFunc(stub)
+		// Add priority to ranking with higher multiplier
+		priorityBonus := float64(stub.Priority) * 10000
+		totalRank := current + priorityBonus
+
+		if totalRank > similarRank {
+			similar, similarRank = stub, totalRank
+		}
+
+		if matchFunc(stub) && totalRank > foundRank {
+			found, foundRank = stub, totalRank
+		}
+	}
+
+	if found != nil {
+		markFunc(found.ID)
+
+		return &Result{found: found}, nil
+	}
+
+	if similar != nil {
+		return &Result{similar: similar}, nil
+	}
+
+	return nil, ErrStubNotFound
+}
+
 // find retrieves the Stub value associated with the given Query from the searcher.
 //
 // Parameters:
@@ -542,58 +598,10 @@ func (s *searcher) searchByID(query Query) (*Result, error) {
 // - *Result: The Result containing the found Stub value (if any), or nil.
 // - error: An error if the search fails.
 func (s *searcher) search(query Query) (*Result, error) {
-	var (
-		found       *Stub
-		foundRank   float64
-		similar     *Stub
-		similarRank float64
-	)
-
-	seq, err := s.storage.findAll(query.Service, query.Method)
-	if err != nil {
-		return nil, s.wrap(err)
-	}
-
-	// Collect all stubs first for stable sorting
-	var stubs []*Stub
-	for v := range seq {
-		stub, ok := v.(*Stub)
-		if !ok {
-			continue
-		}
-		stubs = append(stubs, stub)
-	}
-
-	// Sort stubs by ID for stable ordering when ranks are equal
-	sortStubsByID(stubs)
-
-	// Process stubs in sorted order
-	for _, stub := range stubs {
-		current := rankMatch(query, stub)
-		// Add priority to ranking with higher multiplier
-		priorityBonus := float64(stub.Priority) * 10000
-		totalRank := current + priorityBonus
-
-		if totalRank > similarRank {
-			similar, similarRank = stub, totalRank
-		}
-
-		if match(query, stub) && totalRank > foundRank {
-			found, foundRank = stub, totalRank
-		}
-	}
-
-	if found != nil {
-		s.mark(query, found.ID)
-
-		return &Result{found: found}, nil
-	}
-
-	if similar != nil {
-		return &Result{similar: similar}, nil
-	}
-
-	return nil, ErrStubNotFound
+	return s.searchCommon(query.Service, query.Method, 
+		func(stub *Stub) bool { return match(query, stub) },
+		func(stub *Stub) float64 { return rankMatch(query, stub) },
+		func(id uuid.UUID) { s.mark(query, id) })
 }
 
 // mark marks the given Stub value as used in the searcher.
@@ -719,58 +727,10 @@ func (s *searcher) searchByIDBidi(query QueryBidi) (*BidiResult, error) {
 
 // searchV2 retrieves the Stub value associated with the given QueryV2 from the searcher.
 func (s *searcher) searchV2(query QueryV2) (*Result, error) {
-	var (
-		found       *Stub
-		foundRank   float64
-		similar     *Stub
-		similarRank float64
-	)
-
-	seq, err := s.storage.findAll(query.Service, query.Method)
-	if err != nil {
-		return nil, s.wrap(err)
-	}
-
-	// Collect all stubs first for stable sorting
-	var stubs []*Stub
-	for v := range seq {
-		stub, ok := v.(*Stub)
-		if !ok {
-			continue
-		}
-		stubs = append(stubs, stub)
-	}
-
-	// Sort stubs by ID for stable ordering when ranks are equal
-	sortStubsByID(stubs)
-
-	// Process stubs in sorted order
-	for _, stub := range stubs {
-		current := rankMatchV2(query, stub)
-		// Add priority to ranking with higher multiplier
-		priorityBonus := float64(stub.Priority) * 10000
-		totalRank := current + priorityBonus
-
-		if totalRank > similarRank {
-			similar, similarRank = stub, totalRank
-		}
-
-		if matchV2(query, stub) && totalRank > foundRank {
-			found, foundRank = stub, totalRank
-		}
-	}
-
-	if found != nil {
-		s.markV2(query, found.ID)
-
-		return &Result{found: found}, nil
-	}
-
-	if similar != nil {
-		return &Result{similar: similar}, nil
-	}
-
-	return nil, ErrStubNotFound
+	return s.searchCommon(query.Service, query.Method,
+		func(stub *Stub) bool { return matchV2(query, stub) },
+		func(stub *Stub) float64 { return rankMatchV2(query, stub) },
+		func(id uuid.UUID) { s.markV2(query, id) })
 }
 
 // markV2 marks the given Stub value as used in the searcher.
