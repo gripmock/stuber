@@ -119,7 +119,7 @@ func TestPutMany_FixIDV2(t *testing.T) {
 func TestUpdateManyV2(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New())
 
-	// Create initial stubs
+	
 	stub1 := &stuber.Stub{ID: uuid.New(), Service: "Greeter1", Method: "SayHello1"}
 	stub2 := &stuber.Stub{ID: uuid.New(), Service: "Greeter2", Method: "SayHello2"}
 
