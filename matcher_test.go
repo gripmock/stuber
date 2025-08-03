@@ -4,9 +4,11 @@ import (
 	"testing"
 
 	"github.com/bavix/features"
+
 	"github.com/gripmock/stuber"
 )
 
+//nolint:funlen
 func TestMatchData(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -63,6 +65,7 @@ func TestMatchData(t *testing.T) {
 
 			budgerigar := stuber.NewBudgerigar(features.New())
 			budgerigar.PutMany(stub)
+
 			result, err := budgerigar.FindByQuery(query)
 			if err != nil {
 				if tt.expected {
@@ -97,6 +100,7 @@ func TestMatchWithData(t *testing.T) {
 
 	budgerigar := stuber.NewBudgerigar(features.New())
 	budgerigar.PutMany(stub)
+
 	result, err := budgerigar.FindByQuery(query)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
@@ -139,6 +143,7 @@ func TestBackwardCompatibility(t *testing.T) {
 
 	budgerigar := stuber.NewBudgerigar(features.New())
 	budgerigar.PutMany(stub)
+
 	result, err := budgerigar.FindByQuery(query)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)

@@ -43,22 +43,22 @@ func (s *Stub) IsBidirectional() bool {
 }
 
 // Key returns the unique identifier of the stub.
-func (s Stub) Key() uuid.UUID {
+func (s *Stub) Key() uuid.UUID {
 	return s.ID
 }
 
 // Left returns the service name of the stub.
-func (s Stub) Left() string {
+func (s *Stub) Left() string {
 	return s.Service
 }
 
 // Right returns the method name of the stub.
-func (s Stub) Right() string {
+func (s *Stub) Right() string {
 	return s.Method
 }
 
 // Score returns the priority score of the stub.
-func (s Stub) Score() int {
+func (s *Stub) Score() int {
 	return s.Priority
 }
 

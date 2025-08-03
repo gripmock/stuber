@@ -5,6 +5,7 @@ import (
 
 	"github.com/bavix/features"
 	"github.com/google/uuid"
+
 	"github.com/gripmock/stuber"
 )
 
@@ -424,7 +425,7 @@ func BenchmarkQueryV2Stream(b *testing.B) {
 	}
 }
 
-// BenchmarkQueryV2Comparison compares V1 vs V2 performance
+// BenchmarkQueryV2Comparison compares V1 vs V2 performance.
 func BenchmarkQueryV2Comparison(b *testing.B) {
 	budgerigar := stuber.NewBudgerigar(features.New())
 
@@ -459,7 +460,9 @@ func BenchmarkQueryV2Comparison(b *testing.B) {
 	}
 }
 
-// BenchmarkBidiStreaming benchmarks bidirectional streaming performance
+// BenchmarkBidiStreaming benchmarks bidirectional streaming performance.
+//
+//nolint:funlen
 func BenchmarkBidiStreaming(b *testing.B) {
 	s := stuber.NewBudgerigar(features.New())
 

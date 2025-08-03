@@ -4,10 +4,13 @@ import (
 	"testing"
 
 	"github.com/bavix/features"
+
 	"github.com/gripmock/stuber"
 )
 
 // TestMatchStreamV2 - tests stream matching in V2.
+//
+//nolint:funlen
 func TestMatchStreamV2(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -73,6 +76,7 @@ func TestMatchStreamV2(t *testing.T) {
 
 			budgerigar := stuber.NewBudgerigar(features.New())
 			budgerigar.PutMany(stub)
+
 			result, err := budgerigar.FindByQueryV2(query)
 			if err != nil {
 				if tt.expected {
@@ -112,6 +116,7 @@ func TestMatchWithStreamV2(t *testing.T) {
 
 	budgerigar := stuber.NewBudgerigar(features.New())
 	budgerigar.PutMany(stub)
+
 	result, err := budgerigar.FindByQueryV2(query)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
@@ -157,6 +162,7 @@ func TestBackwardCompatibilityV2(t *testing.T) {
 
 	budgerigar := stuber.NewBudgerigar(features.New())
 	budgerigar.PutMany(stub)
+
 	result, err := budgerigar.FindByQueryV2(query)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
@@ -184,6 +190,7 @@ func TestV2UnaryRequest(t *testing.T) {
 
 	budgerigar := stuber.NewBudgerigar(features.New())
 	budgerigar.PutMany(stub)
+
 	result, err := budgerigar.FindByQueryV2(query)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
@@ -212,6 +219,7 @@ func TestV2StreamRequest(t *testing.T) {
 
 	budgerigar := stuber.NewBudgerigar(features.New())
 	budgerigar.PutMany(stub)
+
 	result, err := budgerigar.FindByQueryV2(query)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
@@ -239,6 +247,7 @@ func TestV2MultipleStreamsNoStubStream(t *testing.T) {
 
 	budgerigar := stuber.NewBudgerigar(features.New())
 	budgerigar.PutMany(stub)
+
 	result, err := budgerigar.FindByQueryV2(query)
 	if err != nil {
 		return

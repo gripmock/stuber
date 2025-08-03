@@ -8,8 +8,9 @@ import (
 
 	"github.com/bavix/features"
 	"github.com/google/uuid"
-	"github.com/gripmock/stuber"
 	"github.com/stretchr/testify/require"
+
+	"github.com/gripmock/stuber"
 )
 
 func TestFindByNotFound(t *testing.T) {
@@ -766,6 +767,7 @@ func TestBudgerigar_FindByQuery_InternalRequest(t *testing.T) {
 	require.Len(t, s.Used(), 1)
 }
 
+//nolint:cyclop,funlen
 func TestBudgerigarWithData(t *testing.T) {
 	budgerigar := stuber.NewBudgerigar(features.New())
 

@@ -34,26 +34,8 @@ linters:
       - linters:
           - dupl
         path: (.+)_test.go
-      - linters:
-          - cyclop
-        path: searcher.go
-        text: "func.*Next.*messageData"
-      - linters:
-          - cyclop
-        path: searcher.go
-        text: "func.*matchInputData"
-      - linters:
-          - cyclop
-        path: searcher.go
-        text: "func.*deepEqual"
-      - linters:
-          - gocognit
-        path: searcher.go
-        text: "func.*deepEqual"
-      - linters:
-          - cyclop
-        path: stuber_test.go
-        text: "func.*TestBudgerigarWithData"
+
+
     paths:
       - third_party$
       - builtin$

@@ -8,8 +8,9 @@ import (
 
 	"github.com/bavix/features"
 	"github.com/google/uuid"
-	"github.com/gripmock/stuber"
 	"github.com/stretchr/testify/require"
+
+	"github.com/gripmock/stuber"
 )
 
 // V2 equivalents of V1 tests
@@ -663,7 +664,9 @@ func TestV2MatcherFunctions(t *testing.T) {
 	require.Equal(t, stub.ID, result.Found().ID)
 }
 
-// TestBidiStreaming tests bidirectional streaming functionality
+// TestBidiStreaming tests bidirectional streaming functionality.
+//
+//nolint:funlen
 func TestBidiStreaming(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New())
 
@@ -760,7 +763,7 @@ func TestBidiStreaming(t *testing.T) {
 	})
 }
 
-// TestBidiStreamingFallback tests fallback behavior when no stubs are available
+// TestBidiStreamingFallback tests fallback behavior when no stubs are available.
 func TestBidiStreamingFallback(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New())
 
@@ -795,7 +798,7 @@ func TestBidiStreamingFallback(t *testing.T) {
 	require.ErrorIs(t, err, stuber.ErrStubNotFound)
 }
 
-// TestBidiStreamingWithID tests bidirectional streaming with ID-based queries
+// TestBidiStreamingWithID tests bidirectional streaming with ID-based queries.
 func TestBidiStreamingWithID(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New())
 
@@ -833,7 +836,7 @@ func TestBidiStreamingWithID(t *testing.T) {
 	require.Equal(t, unaryStub.ID, stub.ID)
 }
 
-// TestBidiStreamingEmptyService tests bidirectional streaming with empty service/method
+// TestBidiStreamingEmptyService tests bidirectional streaming with empty service/method.
 func TestBidiStreamingEmptyService(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New())
 
@@ -848,7 +851,7 @@ func TestBidiStreamingEmptyService(t *testing.T) {
 	require.ErrorIs(t, err, stuber.ErrServiceNotFound)
 }
 
-// TestBidiStreamingWithServerStream tests bidirectional streaming with server streaming responses
+// TestBidiStreamingWithServerStream tests bidirectional streaming with server streaming responses.
 func TestBidiStreamingWithServerStream(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New())
 
@@ -897,7 +900,9 @@ func TestBidiStreamingWithServerStream(t *testing.T) {
 }
 
 // TestBidiStreamingStatefulLogic tests the stateful logic of bidirectional streaming
-// where stubs are filtered based on incoming messages
+// where stubs are filtered based on incoming messages.
+//
+//nolint:funlen
 func TestBidiStreamingStatefulLogic(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New())
 
@@ -987,7 +992,7 @@ func TestBidiStreamingStatefulLogic(t *testing.T) {
 	require.Equal(t, "Pattern 1 completed", stub.Output.Data["response"])
 }
 
-// TestBidiStreamingStatefulLogicDifferentPattern tests with a different pattern
+// TestBidiStreamingStatefulLogicDifferentPattern tests with a different pattern.
 func TestBidiStreamingStatefulLogicDifferentPattern(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New())
 
@@ -1048,7 +1053,7 @@ func TestBidiStreamingStatefulLogicDifferentPattern(t *testing.T) {
 	require.Equal(t, "Pattern 2", stub.Output.Data["response"])
 }
 
-// TestBidiStreamingStatefulLogicNoMatch tests when no stubs match the pattern
+// TestBidiStreamingStatefulLogicNoMatch tests when no stubs match the pattern.
 func TestBidiStreamingStatefulLogicNoMatch(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New())
 
@@ -1092,7 +1097,7 @@ func TestBidiStreamingStatefulLogicNoMatch(t *testing.T) {
 	require.ErrorIs(t, err, stuber.ErrStubNotFound)
 }
 
-// TestBidiStreamingEdgeCases tests edge cases for bidirectional streaming
+// TestBidiStreamingEdgeCases tests edge cases for bidirectional streaming.
 func TestBidiStreamingEdgeCases(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New())
 
@@ -1142,7 +1147,7 @@ func TestBidiStreamingEdgeCases(t *testing.T) {
 	require.Equal(t, "Hello!", stubResult.Output.Data["response"])
 }
 
-// TestFieldNameVariations tests the field name variation matching
+// TestFieldNameVariations tests the field name variation matching.
 func TestFieldNameVariations(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New())
 
@@ -1183,7 +1188,7 @@ func TestFieldNameVariations(t *testing.T) {
 	require.Equal(t, "Hello John!", stubResult2.Output.Data["response"])
 }
 
-// TestCamelCaseVariations tests camelCase field matching
+// TestCamelCaseVariations tests camelCase field matching.
 func TestCamelCaseVariations(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New())
 
@@ -1224,7 +1229,7 @@ func TestCamelCaseVariations(t *testing.T) {
 	require.Equal(t, "Hello John!", stubResult2.Output.Data["response"])
 }
 
-// TestComplexFieldVariations tests complex field name variations
+// TestComplexFieldVariations tests complex field name variations.
 func TestComplexFieldVariations(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New())
 
@@ -1269,7 +1274,7 @@ func TestComplexFieldVariations(t *testing.T) {
 	require.Equal(t, "Success!", stubResult.Output.Data["response"])
 }
 
-// TestEmptyFieldVariations tests edge cases with empty fields
+// TestEmptyFieldVariations tests edge cases with empty fields.
 func TestEmptyFieldVariations(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New())
 
@@ -1303,7 +1308,9 @@ func TestEmptyFieldVariations(t *testing.T) {
 	require.Equal(t, "Empty key!", stubResult.Output.Data["response"])
 }
 
-// TestStableSortingOptimized tests that results are stable across multiple runs with optimized sorting
+// TestStableSortingOptimized tests that results are stable across multiple runs with optimized sorting.
+//
+//nolint:funlen
 func TestStableSortingOptimized(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New())
 
@@ -1356,6 +1363,7 @@ func TestStableSortingOptimized(t *testing.T) {
 
 	// Run multiple times to ensure stable results
 	var firstResult *stuber.Stub
+
 	for range 10 {
 		result, err := s.FindByQueryBidi(query)
 		require.NoError(t, err)

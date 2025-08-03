@@ -22,7 +22,7 @@ var ErrMethodNotFound = errors.New("method not found")
 // ErrStubNotFound is returned when the stub is not found.
 var ErrStubNotFound = errors.New("stub not found")
 
-// PriorityMultiplier is used to boost priority in ranking calculations
+// PriorityMultiplier is used to boost priority in ranking calculations.
 const PriorityMultiplier = 10000
 
 // searcher is a struct that manages the storage of search results.
@@ -89,6 +89,8 @@ type BidiResult struct {
 
 // Next finds a matching stub for the given message data.
 // Each call to Next filters the candidate stubs based on the new message.
+//
+//nolint:cyclop,funlen
 func (br *BidiResult) Next(messageData map[string]any) (*Stub, error) {
 	br.mu.Lock()
 	defer br.mu.Unlock()
@@ -128,6 +130,7 @@ func (br *BidiResult) Next(messageData map[string]any) (*Stub, error) {
 	} else {
 		// Filter existing candidate stubs based on new message
 		br.messageIndex++
+
 		var newCandidates []*Stub
 
 		for _, stub := range br.candidateStubs {
@@ -145,9 +148,11 @@ func (br *BidiResult) Next(messageData map[string]any) (*Stub, error) {
 	}
 
 	// Find the best matching stub among candidates
-	var bestStub *Stub
-	var bestRank float64
-	var candidatesWithSameRank []*Stub
+	var (
+		bestStub               *Stub
+		bestRank               float64
+		candidatesWithSameRank []*Stub
+	)
 
 	// Create query once and reuse
 	query := QueryV2{
@@ -192,7 +197,7 @@ func (br *BidiResult) Next(messageData map[string]any) (*Stub, error) {
 }
 
 // canStubMatchPattern checks if a stub could potentially match the pattern
-// based on the current message index and available stream data
+// based on the current message index and available stream data.
 func (br *BidiResult) canStubMatchPattern(stub *Stub, _ map[string]any) bool {
 	// For client streaming stubs, check if we have enough stream data
 	if stub.IsClientStream() {
@@ -212,7 +217,7 @@ func (br *BidiResult) canStubMatchPattern(stub *Stub, _ map[string]any) bool {
 	return false
 }
 
-// stubMatchesCurrentMessage checks if a stub matches the current message
+// stubMatchesCurrentMessage checks if a stub matches the current message.
 func (br *BidiResult) stubMatchesCurrentMessage(stub *Stub, messageData map[string]any) bool {
 	// For client streaming stubs, use Stream matching at current index
 	if stub.IsClientStream() && br.messageIndex < len(stub.Stream) {
@@ -232,7 +237,9 @@ func (br *BidiResult) stubMatchesCurrentMessage(stub *Stub, messageData map[stri
 	return false
 }
 
-// matchInputData checks if messageData matches the given InputData
+// matchInputData checks if messageData matches the given InputData.
+//
+//nolint:cyclop
 func (br *BidiResult) matchInputData(inputData InputData, messageData map[string]any) bool {
 	// Early exit if InputData is empty
 	if len(inputData.Equals) == 0 && len(inputData.Contains) == 0 && len(inputData.Matches) == 0 {
@@ -281,7 +288,7 @@ func (br *BidiResult) matchInputData(inputData InputData, messageData map[string
 	return true
 }
 
-// findValueWithVariations tries to find a value using different field name conventions
+// findValueWithVariations tries to find a value using different field name conventions.
 func (br *BidiResult) findValueWithVariations(messageData map[string]any, key string) (any, bool) {
 	// Try exact match first
 	if value, exists := messageData[key]; exists {
@@ -303,12 +310,13 @@ func (br *BidiResult) findValueWithVariations(messageData map[string]any, key st
 	return nil, false
 }
 
-// toCamelCase converts snake_case to camelCase
+// toCamelCase converts snake_case to camelCase.
 func toCamelCase(s string) string {
 	parts := strings.Split(s, "_")
 	if len(parts) == 1 {
 		return s
 	}
+
 	result := parts[0]
 	for i := 1; i < len(parts); i++ {
 		if len(parts[i]) > 0 {
@@ -319,28 +327,33 @@ func toCamelCase(s string) string {
 	return result
 }
 
-// toSnakeCase converts camelCase to snake_case
+// toSnakeCase converts camelCase to snake_case.
 func toSnakeCase(s string) string {
 	if s == "" {
 		return ""
 	}
 
 	var result strings.Builder
+
 	for i, r := range s {
 		if i > 0 && unicode.IsUpper(r) {
 			result.WriteByte('_')
 		}
+
 		result.WriteRune(unicode.ToLower(r))
 	}
 
 	return result.String()
 }
 
-// deepEqual performs deep equality check with better implementation
+// deepEqual performs deep equality check with better implementation.
+//
+//nolint:cyclop,gocognit,nestif
 func deepEqual(a, b any) bool {
 	if a == nil && b == nil {
 		return true
 	}
+
 	if a == nil || b == nil {
 		return false
 	}
@@ -357,6 +370,7 @@ func deepEqual(a, b any) bool {
 			if len(aMap) != len(bMap) {
 				return false
 			}
+
 			for k, v := range aMap {
 				if bv, exists := bMap[k]; !exists || !deepEqual(v, bv) {
 					return false
@@ -373,6 +387,7 @@ func deepEqual(a, b any) bool {
 			if len(aSlice) != len(bSlice) {
 				return false
 			}
+
 			for i, v := range aSlice {
 				if !deepEqual(v, bSlice[i]) {
 					return false
@@ -388,7 +403,7 @@ func deepEqual(a, b any) bool {
 }
 
 // sortStubsByID sorts stubs by ID for stable ordering when ranks are equal
-// This ensures consistent results across multiple runs
+// This ensures consistent results across multiple runs.
 func sortStubsByID(stubs []*Stub) {
 	sort.Slice(stubs, func(i, j int) bool {
 		// Compare UUIDs directly for better performance
@@ -396,7 +411,7 @@ func sortStubsByID(stubs []*Stub) {
 	})
 }
 
-// rankStub calculates the ranking score for a stub
+// rankStub calculates the ranking score for a stub.
 func (br *BidiResult) rankStub(stub *Stub, query QueryV2) float64 {
 	// Use the existing V2 ranking logic
 	return rankMatchV2(query, stub)
@@ -494,7 +509,7 @@ func (s *searcher) unused() []*Stub {
 	return unused
 }
 
-// searchCommon is a common search function that can be used by both search and searchV2
+// searchCommon is a common search function that can be used by both search and searchV2.
 func (s *searcher) searchCommon(
 	service, method string,
 	matchFunc func(*Stub) bool,
@@ -520,6 +535,7 @@ func (s *searcher) searchCommon(
 		if !ok {
 			continue
 		}
+
 		stubs = append(stubs, stub)
 	}
 
