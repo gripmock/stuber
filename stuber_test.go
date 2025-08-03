@@ -295,19 +295,19 @@ func TestBudgerigar_SearchWithPackageAndWithoutPackage(t *testing.T) {
 
 	cases := []struct {
 		payload string
-		id      uuid.UUID
+		message string
 	}{
 		{
 			payload: `{"data":{"name":"simple3"},"method":"SayHello","service":"helloworld.v1.Gripmock"}`,
-			id:      stubs[0].ID,
+			message: "Hello Simple3. Package helloworld.v1",
 		},
 		{
 			payload: `{"data":{"name":"simple3"},"method":"SayHello","service":"Gripmock"}`,
-			id:      stubs[2].ID,
+			message: "Hello Simple3",
 		},
 		{
 			payload: `{"data":{"name":"simple4"},"method":"SayHello","service":"helloworld.v1.Gripmock"}`,
-			id:      stubs[1].ID,
+			message: "Hello Simple4",
 		},
 	}
 
@@ -320,7 +320,7 @@ func TestBudgerigar_SearchWithPackageAndWithoutPackage(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, r)
 		require.NotNil(t, r.Found())
-		require.Equal(t, c.id, r.Found().ID)
+		require.Equal(t, c.message, r.Found().Output.Data["message"])
 		require.Nil(t, r.Similar())
 	}
 

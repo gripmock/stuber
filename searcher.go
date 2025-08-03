@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"iter"
 	"maps"
+	"sort"
 	"strings"
 	"sync"
 	"unicode"
@@ -143,6 +144,7 @@ func (br *BidiResult) Next(messageData map[string]any) (*Stub, error) {
 	// Find the best matching stub among candidates
 	var bestStub *Stub
 	var bestRank float64
+	var candidatesWithSameRank []*Stub
 
 	// Create query once and reuse
 	query := QueryV2{
@@ -162,8 +164,18 @@ func (br *BidiResult) Next(messageData map[string]any) (*Stub, error) {
 			if totalRank > bestRank {
 				bestStub = stub
 				bestRank = totalRank
+				candidatesWithSameRank = []*Stub{stub}
+			} else if totalRank == bestRank {
+				// Collect candidates with same rank for stable sorting
+				candidatesWithSameRank = append(candidatesWithSameRank, stub)
 			}
 		}
+	}
+
+	// If we have multiple candidates with same rank, sort by ID for stability
+	if len(candidatesWithSameRank) > 1 {
+		sortStubsByID(candidatesWithSameRank)
+		bestStub = candidatesWithSameRank[0]
 	}
 
 	if bestStub != nil {
@@ -367,6 +379,15 @@ func deepEqual(a, b any) bool {
 	return fmt.Sprintf("%v", a) == fmt.Sprintf("%v", b)
 }
 
+// sortStubsByID sorts stubs by ID for stable ordering when ranks are equal
+// This ensures consistent results across multiple runs
+func sortStubsByID(stubs []*Stub) {
+	sort.Slice(stubs, func(i, j int) bool {
+		// Compare UUIDs directly for better performance
+		return stubs[i].ID.String() < stubs[j].ID.String()
+	})
+}
+
 // rankStub calculates the ranking score for a stub
 func (br *BidiResult) rankStub(stub *Stub, query QueryV2) float64 {
 	// Use the existing V2 ranking logic
@@ -544,25 +565,21 @@ func (s *searcher) search(query Query) (*Result, error) {
 	}
 
 	// Sort stubs by ID for stable ordering when ranks are equal
-	// This ensures consistent results across multiple runs
-	for i := 0; i < len(stubs)-1; i++ {
-		for j := i + 1; j < len(stubs); j++ {
-			if stubs[i].ID.String() > stubs[j].ID.String() {
-				stubs[i], stubs[j] = stubs[j], stubs[i]
-			}
-		}
-	}
+	sortStubsByID(stubs)
 
 	// Process stubs in sorted order
 	for _, stub := range stubs {
 		current := rankMatch(query, stub)
+		// Add priority to ranking with higher multiplier
+		priorityBonus := float64(stub.Priority) * 10000
+		totalRank := current + priorityBonus
 
-		if current > similarRank {
-			similar, similarRank = stub, current
+		if totalRank > similarRank {
+			similar, similarRank = stub, totalRank
 		}
 
-		if match(query, stub) && current > foundRank {
-			found, foundRank = stub, current
+		if match(query, stub) && totalRank > foundRank {
+			found, foundRank = stub, totalRank
 		}
 	}
 
@@ -725,25 +742,21 @@ func (s *searcher) searchV2(query QueryV2) (*Result, error) {
 	}
 
 	// Sort stubs by ID for stable ordering when ranks are equal
-	// This ensures consistent results across multiple runs
-	for i := 0; i < len(stubs)-1; i++ {
-		for j := i + 1; j < len(stubs); j++ {
-			if stubs[i].ID.String() > stubs[j].ID.String() {
-				stubs[i], stubs[j] = stubs[j], stubs[i]
-			}
-		}
-	}
+	sortStubsByID(stubs)
 
 	// Process stubs in sorted order
 	for _, stub := range stubs {
 		current := rankMatchV2(query, stub)
+		// Add priority to ranking with higher multiplier
+		priorityBonus := float64(stub.Priority) * 10000
+		totalRank := current + priorityBonus
 
-		if current > similarRank {
-			similar, similarRank = stub, current
+		if totalRank > similarRank {
+			similar, similarRank = stub, totalRank
 		}
 
-		if matchV2(query, stub) && current > foundRank {
-			found, foundRank = stub, current
+		if matchV2(query, stub) && totalRank > foundRank {
+			found, foundRank = stub, totalRank
 		}
 	}
 

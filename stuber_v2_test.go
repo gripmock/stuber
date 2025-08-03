@@ -1303,3 +1303,74 @@ func TestEmptyFieldVariations(t *testing.T) {
 	require.NotNil(t, stubResult)
 	require.Equal(t, "Empty key!", stubResult.Output.Data["response"])
 }
+
+// TestStableSortingOptimized tests that results are stable across multiple runs with optimized sorting
+func TestStableSortingOptimized(t *testing.T) {
+	s := stuber.NewBudgerigar(features.New())
+
+	// Create multiple stubs with same priority but different IDs
+	stub1 := &stuber.Stub{
+		ID:       uuid.New(),
+		Service:  "TestService",
+		Method:   "Test",
+		Priority: 1,
+		Input: stuber.InputData{
+			Equals: map[string]any{"field": "value"},
+		},
+		Output: stuber.Output{
+			Data: map[string]any{"response": "Stub1"},
+		},
+	}
+
+	stub2 := &stuber.Stub{
+		ID:       uuid.New(),
+		Service:  "TestService",
+		Method:   "Test",
+		Priority: 1, // Same priority
+		Input: stuber.InputData{
+			Equals: map[string]any{"field": "value"},
+		},
+		Output: stuber.Output{
+			Data: map[string]any{"response": "Stub2"},
+		},
+	}
+
+	stub3 := &stuber.Stub{
+		ID:       uuid.New(),
+		Service:  "TestService",
+		Method:   "Test",
+		Priority: 1, // Same priority
+		Input: stuber.InputData{
+			Equals: map[string]any{"field": "value"},
+		},
+		Output: stuber.Output{
+			Data: map[string]any{"response": "Stub3"},
+		},
+	}
+
+	s.PutMany(stub1, stub2, stub3)
+
+	query := stuber.QueryBidi{
+		Service: "TestService",
+		Method:  "Test",
+	}
+
+	// Run multiple times to ensure stable results
+	var firstResult *stuber.Stub
+	for i := 0; i < 10; i++ {
+		result, err := s.FindByQueryBidi(query)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		stubResult, err := result.Next(map[string]any{"field": "value"})
+		require.NoError(t, err)
+		require.NotNil(t, stubResult)
+
+		if firstResult == nil {
+			firstResult = stubResult
+		} else {
+			// Should always return the same stub due to stable sorting
+			require.Equal(t, firstResult.ID, stubResult.ID, "Stable sorting failed on iteration %d", i)
+		}
+	}
+}
