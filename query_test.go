@@ -13,13 +13,11 @@ import (
 )
 
 func TestQuery_RequestInternal(t *testing.T) {
-	// Test without internal flag
 	q := Query{
 		toggles: features.New(),
 	}
 	require.False(t, q.RequestInternal())
 
-	// Test with internal flag
 	q = Query{
 		toggles: features.New(RequestInternalFlag),
 	}
@@ -27,12 +25,10 @@ func TestQuery_RequestInternal(t *testing.T) {
 }
 
 func TestToggles(t *testing.T) {
-	// Test without header
 	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/", nil)
 	togglesResult := toggles(req)
 	require.False(t, togglesResult.Has(RequestInternalFlag))
 
-	// Test with header
 	req, _ = http.NewRequestWithContext(context.Background(), http.MethodPost, "/", nil)
 	req.Header.Set("X-Gripmock-Requestinternal", "true")
 	togglesResult = toggles(req)

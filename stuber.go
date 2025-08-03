@@ -41,15 +41,13 @@ func NewBudgerigar(toggles features.Toggles) *Budgerigar {
 // Returns:
 // - []uuid.UUID: The keys of the inserted Stub values.
 func (b *Budgerigar) PutMany(values ...*Stub) []uuid.UUID {
-	// Iterate over each Stub value.
 	for _, value := range values {
-		// If the Stub value does not have a key, generate a new UUID for its key.
 		if value.Key() == uuid.Nil {
 			value.ID = uuid.New()
 		}
 	}
 
-	// Insert the Stub values into the Budgerigar's searcher.
+	return b.searcher.upsert(values...)
 	return b.searcher.upsert(values...)
 }
 
@@ -62,12 +60,9 @@ func (b *Budgerigar) PutMany(values ...*Stub) []uuid.UUID {
 // Returns:
 // - []uuid.UUID: The keys of the updated values.
 func (b *Budgerigar) UpdateMany(values ...*Stub) []uuid.UUID {
-	// Extract the values that have a non-nil key.
-	// These values will be updated in the searcher.
 	updates := make([]*Stub, 0, len(values))
 
 	for _, value := range values {
-		// Only update the value if it has a non-nil key.
 		if value.Key() != uuid.Nil {
 			updates = append(updates, value)
 		}
@@ -107,7 +102,6 @@ func (b *Budgerigar) FindByID(id uuid.UUID) *Stub {
 // - *Result: The Result containing the found Stub value (if any), or nil.
 // - error: An error if the search fails.
 func (b *Budgerigar) FindByQuery(query Query) (*Result, error) {
-	// Backward compatibility: convert the method field to title case if the MethodTitle feature flag is enabled.
 	if b.toggles.Has(MethodTitle) {
 		query.Method = cases.
 			Title(language.English, cases.NoLower).
@@ -115,6 +109,40 @@ func (b *Budgerigar) FindByQuery(query Query) (*Result, error) {
 	}
 
 	return b.searcher.find(query)
+}
+
+// FindByQueryV2 retrieves the Stub value associated with the given QueryV2 from the Budgerigar's searcher.
+//
+// Parameters:
+// - query: The QueryV2 used to search for a Stub value.
+//
+// Returns:
+// - *Result: The Result containing the found Stub value (if any), or nil.
+// - error: An error if the search fails.
+func (b *Budgerigar) FindByQueryV2(query QueryV2) (*Result, error) {
+	if b.toggles.Has(MethodTitle) {
+		query.Method = cases.Title(language.English).String(query.Method)
+	}
+
+	return b.searcher.findV2(query)
+}
+
+// FindByQueryBidi retrieves a BidiResult for bidirectional streaming with the given QueryBidi.
+// For bidirectional streaming, each message is treated as a separate unary request.
+// The server can respond with multiple messages for each request.
+//
+// Parameters:
+// - query: The QueryBidi used to search for bidirectional streaming stubs.
+//
+// Returns:
+// - *BidiResult: The BidiResult for finding matching stubs for each message.
+// - error: An error if the search fails.
+func (b *Budgerigar) FindByQueryBidi(query QueryBidi) (*BidiResult, error) {
+	if b.toggles.Has(MethodTitle) {
+		query.Method = cases.Title(language.English).String(query.Method)
+	}
+
+	return b.searcher.findBidi(query)
 }
 
 // FindBy retrieves all Stub values that match the given service and method

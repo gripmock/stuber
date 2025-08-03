@@ -2,6 +2,7 @@ package stuber
 
 import (
 	"errors"
+	"fmt"
 	"iter"
 	"maps"
 	"sync"
@@ -64,6 +65,257 @@ func (r *Result) Found() *Stub {
 // Returns a pointer to the Stub struct representing the similar match.
 func (r *Result) Similar() *Stub {
 	return r.similar
+}
+
+// BidiResult represents the result of a bidirectional streaming search operation.
+// For bidirectional streaming, we need to maintain state and filter stubs as messages arrive.
+type BidiResult struct {
+	searcher       *searcher
+	service        string
+	method         string
+	headers        map[string]any
+	allStubs       []*Stub      // All available stubs for this service/method
+	candidateStubs []*Stub      // Stubs that match the pattern so far
+	messageIndex   int          // Current message index in the stream
+	isFirstCall    bool         // Whether this is the first call to Next()
+	mu             sync.RWMutex // Thread safety for concurrent access
+}
+
+// Next finds a matching stub for the given message data.
+// Each call to Next filters the candidate stubs based on the new message.
+func (br *BidiResult) Next(messageData map[string]any) (*Stub, error) {
+	br.mu.Lock()
+	defer br.mu.Unlock()
+
+	// Validate input
+	if messageData == nil {
+		return nil, ErrStubNotFound
+	}
+
+	// Validate service and method
+	if br.service == "" || br.method == "" {
+		return nil, ErrStubNotFound
+	}
+
+	// Validate headers
+	if br.headers == nil {
+		br.headers = make(map[string]any)
+	}
+
+	// Validate allStubs
+	if len(br.allStubs) == 0 {
+		return nil, ErrStubNotFound
+	}
+
+	// On first call, initialize candidate stubs
+	if br.isFirstCall {
+		br.candidateStubs = make([]*Stub, 0, len(br.allStubs))
+		br.messageIndex = 0
+		br.isFirstCall = false
+
+		// Find all stubs that could potentially match the pattern
+		for _, stub := range br.allStubs {
+			if br.canStubMatchPattern(stub, messageData) {
+				br.candidateStubs = append(br.candidateStubs, stub)
+			}
+		}
+	} else {
+		// Filter existing candidate stubs based on new message
+		br.messageIndex++
+		var newCandidates []*Stub
+
+		for _, stub := range br.candidateStubs {
+			if br.canStubMatchPattern(stub, messageData) {
+				newCandidates = append(newCandidates, stub)
+			}
+		}
+
+		br.candidateStubs = newCandidates
+	}
+
+	// If no candidates remain, return error
+	if len(br.candidateStubs) == 0 {
+		return nil, ErrStubNotFound
+	}
+
+	// Find the best matching stub among candidates
+	var bestStub *Stub
+	var bestRank float64
+
+	// Create query once and reuse
+	query := QueryV2{
+		Service: br.service,
+		Method:  br.method,
+		Headers: br.headers,
+		Input:   []map[string]any{messageData},
+	}
+
+	for _, stub := range br.candidateStubs {
+		if br.stubMatchesCurrentMessage(stub, messageData) {
+			rank := br.rankStub(stub, query)
+			// Add priority to ranking with higher multiplier
+			priorityBonus := float64(stub.Priority) * 10000
+			totalRank := rank + priorityBonus
+
+			if totalRank > bestRank {
+				bestStub = stub
+				bestRank = totalRank
+			}
+		}
+	}
+
+	if bestStub != nil {
+		// Mark the stub as used
+		br.searcher.markV2(query, bestStub.ID)
+		return bestStub, nil
+	}
+
+	return nil, ErrStubNotFound
+}
+
+// canStubMatchPattern checks if a stub could potentially match the pattern
+// based on the current message index and available stream data
+func (br *BidiResult) canStubMatchPattern(stub *Stub, messageData map[string]any) bool {
+	// For client streaming stubs, check if we have enough stream data
+	if stub.IsClientStream() {
+		return br.messageIndex < len(stub.Stream)
+	}
+
+	// For unary stubs, always consider them as fallback candidates
+	if stub.IsUnary() {
+		return true
+	}
+
+	// For server streaming stubs, consider them as fallback candidates
+	if stub.IsServerStream() {
+		return true
+	}
+
+	return false
+}
+
+// stubMatchesCurrentMessage checks if a stub matches the current message
+func (br *BidiResult) stubMatchesCurrentMessage(stub *Stub, messageData map[string]any) bool {
+	// For client streaming stubs, use Stream matching at current index
+	if stub.IsClientStream() && br.messageIndex < len(stub.Stream) {
+		return br.matchInputData(stub.Stream[br.messageIndex], messageData)
+	}
+
+	// For unary stubs, use Input matching
+	if stub.IsUnary() {
+		return br.matchInputData(stub.Input, messageData)
+	}
+
+	// For server streaming stubs, use Input matching
+	if stub.IsServerStream() {
+		return br.matchInputData(stub.Input, messageData)
+	}
+
+	return false
+}
+
+// matchInputData checks if messageData matches the given InputData
+func (br *BidiResult) matchInputData(inputData InputData, messageData map[string]any) bool {
+	// Early exit if InputData is empty
+	if len(inputData.Equals) == 0 && len(inputData.Contains) == 0 && len(inputData.Matches) == 0 {
+		return true
+	}
+
+	// Check Equals
+	if len(inputData.Equals) > 0 {
+		for key, expectedValue := range inputData.Equals {
+			if actualValue, exists := messageData[key]; !exists || !deepEqual(actualValue, expectedValue) {
+				return false
+			}
+		}
+	}
+
+	// Check Contains - avoid creating temporary maps
+	if len(inputData.Contains) > 0 {
+		for key, expectedValue := range inputData.Contains {
+			if actualValue, exists := messageData[key]; !exists {
+				return false
+			} else {
+				// Create minimal map for contains check
+				tempMap := map[string]any{key: expectedValue}
+				if !contains(tempMap, actualValue, false) {
+					return false
+				}
+			}
+		}
+	}
+
+	// Check Matches - avoid creating temporary maps
+	if len(inputData.Matches) > 0 {
+		for key, expectedValue := range inputData.Matches {
+			if actualValue, exists := messageData[key]; !exists {
+				return false
+			} else {
+				// Create minimal map for matches check
+				tempMap := map[string]any{key: expectedValue}
+				if !matches(tempMap, actualValue, false) {
+					return false
+				}
+			}
+		}
+	}
+
+	return true
+}
+
+// deepEqual performs deep equality check with better implementation
+func deepEqual(a, b any) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+
+	// Try direct comparison first (only for comparable types)
+	switch a.(type) {
+	case string, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64, bool:
+		return a == b
+	}
+
+	// For maps, compare keys and values
+	if aMap, aOk := a.(map[string]any); aOk {
+		if bMap, bOk := b.(map[string]any); bOk {
+			if len(aMap) != len(bMap) {
+				return false
+			}
+			for k, v := range aMap {
+				if bv, exists := bMap[k]; !exists || !deepEqual(v, bv) {
+					return false
+				}
+			}
+			return true
+		}
+	}
+
+	// For slices, compare elements
+	if aSlice, aOk := a.([]any); aOk {
+		if bSlice, bOk := b.([]any); bOk {
+			if len(aSlice) != len(bSlice) {
+				return false
+			}
+			for i, v := range aSlice {
+				if !deepEqual(v, bSlice[i]) {
+					return false
+				}
+			}
+			return true
+		}
+	}
+
+	// Fallback to string comparison
+	return fmt.Sprintf("%v", a) == fmt.Sprintf("%v", b)
+}
+
+// rankStub calculates the ranking score for a stub
+func (br *BidiResult) rankStub(stub *Stub, query QueryV2) float64 {
+	// Use the existing V2 ranking logic
+	return rankMatchV2(query, stub)
 }
 
 // upsert inserts the given stub values into the searcher. If a stub value
@@ -274,6 +526,163 @@ func (s *searcher) mark(query Query, id uuid.UUID) {
 	defer s.mu.Unlock()
 
 	// Mark the Stub value as used by adding it to the stubUsed map.
+	s.stubUsed[id] = struct{}{}
+}
+
+// findV2 retrieves the Stub value associated with the given QueryV2 from the searcher.
+func (s *searcher) findV2(query QueryV2) (*Result, error) {
+	// Check if the QueryV2 has an ID field
+	if query.ID != nil {
+		// Search for the Stub value with the given ID
+		return s.searchByIDV2(query)
+	}
+
+	// Search for the Stub value with the given service and method
+	return s.searchV2(query)
+}
+
+// searchByIDV2 retrieves the Stub value associated with the given ID from the searcher.
+func (s *searcher) searchByIDV2(query QueryV2) (*Result, error) {
+	// Check if the given service and method are valid
+	_, err := s.storage.posByPN(query.Service, query.Method)
+	if err != nil {
+		return nil, s.wrap(err)
+	}
+
+	// Search for the Stub value with the given ID
+	if found := s.findByID(*query.ID); found != nil {
+		// Mark the Stub value as used
+		s.markV2(query, *query.ID)
+
+		// Return the found Stub value
+		return &Result{found: found}, nil
+	}
+
+	// Return an error if the Stub value is not found
+	return nil, ErrServiceNotFound
+}
+
+// findBidi retrieves a BidiResult for bidirectional streaming with the given QueryBidi.
+// For bidirectional streaming, each message is treated as a separate unary request.
+func (s *searcher) findBidi(query QueryBidi) (*BidiResult, error) {
+	// Check if the QueryBidi has an ID field
+	if query.ID != nil {
+		// For ID-based queries, we can't use bidirectional streaming - fallback to regular search
+		return s.searchByIDBidi(query)
+	}
+
+	// Check if the given service and method are valid
+	_, err := s.storage.posByPN(query.Service, query.Method)
+	if err != nil {
+		return nil, s.wrap(err)
+	}
+
+	// Fetch all stubs for this service/method
+	seq, err := s.storage.findAll(query.Service, query.Method)
+	if err != nil {
+		return nil, s.wrap(err)
+	}
+
+	var allStubs []*Stub
+	for v := range seq {
+		if stub, ok := v.(*Stub); ok {
+			allStubs = append(allStubs, stub)
+		}
+	}
+
+	return &BidiResult{
+		searcher:       s,
+		service:        query.Service,
+		method:         query.Method,
+		headers:        query.Headers,
+		allStubs:       allStubs,
+		candidateStubs: make([]*Stub, 0, len(allStubs)),
+		messageIndex:   0,
+		isFirstCall:    true,
+	}, nil
+}
+
+// searchByIDBidi handles ID-based queries for bidirectional streaming.
+// Since we can't use bidirectional streaming for ID-based queries, we fallback to regular search.
+func (s *searcher) searchByIDBidi(query QueryBidi) (*BidiResult, error) {
+	// Check if the given service and method are valid
+	_, err := s.storage.posByPN(query.Service, query.Method)
+	if err != nil {
+		return nil, s.wrap(err)
+	}
+
+	// Search for the Stub value with the given ID
+	if found := s.findByID(*query.ID); found != nil {
+		return &BidiResult{
+			searcher:       s,
+			service:        query.Service,
+			method:         query.Method,
+			headers:        query.Headers,
+			allStubs:       []*Stub{found},
+			candidateStubs: []*Stub{found},
+			messageIndex:   0,
+			isFirstCall:    true,
+		}, nil
+	}
+
+	// Return an error if the Stub value is not found
+	return nil, ErrServiceNotFound
+}
+
+// searchV2 retrieves the Stub value associated with the given QueryV2 from the searcher.
+func (s *searcher) searchV2(query QueryV2) (*Result, error) {
+	var (
+		found       *Stub
+		foundRank   float64
+		similar     *Stub
+		similarRank float64
+	)
+
+	seq, err := s.storage.findAll(query.Service, query.Method)
+	if err != nil {
+		return nil, s.wrap(err)
+	}
+
+	for v := range seq {
+		stub, ok := v.(*Stub)
+		if !ok {
+			continue
+		}
+
+		current := rankMatchV2(query, stub)
+
+		if current > similarRank {
+			similar, similarRank = stub, current
+		}
+
+		if matchV2(query, stub) && current > foundRank {
+			found, foundRank = stub, current
+		}
+	}
+
+	if found != nil {
+		s.markV2(query, found.ID)
+
+		return &Result{found: found}, nil
+	}
+
+	if similar != nil {
+		return &Result{similar: similar}, nil
+	}
+
+	return nil, ErrStubNotFound
+}
+
+// markV2 marks the given Stub value as used in the searcher.
+func (s *searcher) markV2(query QueryV2, id uuid.UUID) {
+	// If the query's RequestInternal flag is set, skip the mark
+	if query.RequestInternal() {
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	s.stubUsed[id] = struct{}{}
 }
 

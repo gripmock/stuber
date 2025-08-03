@@ -66,7 +66,6 @@ func TestFindBy(t *testing.T) {
 func TestFindBySorted(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New())
 
-	// Create stubs with different priorities
 	stub1 := &stuber.Stub{ID: uuid.New(), Service: "Greeter1", Method: "SayHello1", Priority: 10}
 	stub2 := &stuber.Stub{ID: uuid.New(), Service: "Greeter1", Method: "SayHello1", Priority: 30}
 	stub3 := &stuber.Stub{ID: uuid.New(), Service: "Greeter1", Method: "SayHello1", Priority: 20}
@@ -747,7 +746,6 @@ func TestBudgerigar_FindByQuery_InternalRequest(t *testing.T) {
 	}
 	s.PutMany(stub)
 
-	// Test internal request (should not mark as used)
 	// We can't directly test internal requests through the public API
 	// but we can test that normal requests mark stubs as used
 	result, err := s.FindByQuery(stuber.Query{
@@ -759,4 +757,114 @@ func TestBudgerigar_FindByQuery_InternalRequest(t *testing.T) {
 
 	// Should be marked as used for normal requests
 	require.Len(t, s.Used(), 1)
+}
+
+func TestBudgerigarWithData(t *testing.T) {
+	budgerigar := stuber.NewBudgerigar(features.New())
+
+	stub := &stuber.Stub{
+		Service: "test-service",
+		Method:  "test-method",
+		Input: stuber.InputData{
+			Equals: map[string]any{"name": "John", "age": 30},
+		},
+		Output: stuber.Output{
+			Data: map[string]any{"result": "success"},
+		},
+	}
+
+	// Add the stub
+	budgerigar.PutMany(stub)
+
+	query := stuber.Query{
+		Service: "test-service",
+		Method:  "test-method",
+		Data:    map[string]any{"name": "John", "age": 30},
+	}
+
+	result, err := budgerigar.FindByQuery(query)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	if result.Found() == nil {
+		t.Error("Expected to find exact match")
+	}
+
+	nonMatchingQuery := stuber.Query{
+		Service: "test-service",
+		Method:  "test-method",
+		Data:    map[string]any{"name": "John", "age": 25}, // Different age
+	}
+
+	result, err = budgerigar.FindByQuery(nonMatchingQuery)
+	if err != nil {
+		if err.Error() != "stub not found" {
+			t.Fatalf("Expected 'stub not found' error, got %v", err)
+		}
+		return
+	}
+
+	if result.Found() != nil {
+		t.Error("Expected no exact found result for non-matching data")
+	}
+
+	if result.Similar() == nil {
+		t.Error("Expected similar result for non-matching data")
+	}
+
+	partialQuery := stuber.Query{
+		Service: "test-service",
+		Method:  "test-method",
+		Data:    map[string]any{"name": "John"}, // Only name, missing age
+	}
+
+	result, err = budgerigar.FindByQuery(partialQuery)
+	if err != nil {
+		if err.Error() != "stub not found" {
+			t.Fatalf("Expected 'stub not found' error, got %v", err)
+		}
+		return
+	}
+
+	if result.Found() != nil {
+		t.Error("Expected no exact found result for partial data")
+	}
+
+	if result.Similar() == nil {
+		t.Error("Expected similar result for partial data")
+	}
+}
+
+func TestBudgerigarBackwardCompatibility(t *testing.T) {
+	budgerigar := stuber.NewBudgerigar(features.New())
+
+	stub := &stuber.Stub{
+		Service: "test-service",
+		Method:  "test-method",
+		Input: stuber.InputData{
+			Equals: map[string]any{"key1": "value1"},
+		},
+		Output: stuber.Output{
+			Data: map[string]any{"result": "success"},
+		},
+	}
+
+	// Add the stub
+	budgerigar.PutMany(stub)
+
+	query := stuber.Query{
+		Service: "test-service",
+		Method:  "test-method",
+		Data:    map[string]any{"key1": "value1"},
+	}
+
+	result, err := budgerigar.FindByQuery(query)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	if result.Found() == nil {
+		t.Error("Expected to find exact match for backward compatibility")
+	}
 }

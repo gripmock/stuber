@@ -353,7 +353,6 @@ func TestStorageFindAll_EmptyResult(t *testing.T) {
 	// Add items
 	s.upsert(&testItem{id: uuid.New(), left: "A", right: "B"})
 
-	// Test finding with non-existent service/method
 	_, err := s.findAll("NonExistent", "Method")
 	require.ErrorIs(t, err, ErrLeftNotFound)
 }
@@ -361,7 +360,6 @@ func TestStorageFindAll_EmptyResult(t *testing.T) {
 func TestStorageUpsert_Empty(t *testing.T) {
 	s := newStorage()
 
-	// Test upsert with empty slice
 	result := s.upsert()
 	require.Nil(t, result)
 }
