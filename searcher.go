@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"iter"
 	"maps"
+	"strings"
 	"sync"
+	"unicode"
 
 	"github.com/google/uuid"
 )
@@ -224,7 +226,7 @@ func (br *BidiResult) matchInputData(inputData InputData, messageData map[string
 	// Check Equals
 	if len(inputData.Equals) > 0 {
 		for key, expectedValue := range inputData.Equals {
-			if actualValue, exists := messageData[key]; !exists || !deepEqual(actualValue, expectedValue) {
+			if actualValue, exists := br.findValueWithVariations(messageData, key); !exists || !deepEqual(actualValue, expectedValue) {
 				return false
 			}
 		}
@@ -261,6 +263,59 @@ func (br *BidiResult) matchInputData(inputData InputData, messageData map[string
 	}
 
 	return true
+}
+
+// findValueWithVariations tries to find a value using different field name conventions
+func (br *BidiResult) findValueWithVariations(messageData map[string]any, key string) (any, bool) {
+	// Try exact match first
+	if value, exists := messageData[key]; exists {
+		return value, true
+	}
+
+	// Try camelCase variations
+	camelKey := toCamelCase(key)
+	if value, exists := messageData[camelKey]; exists {
+		return value, true
+	}
+
+	// Try snake_case variations
+	snakeKey := toSnakeCase(key)
+	if value, exists := messageData[snakeKey]; exists {
+		return value, true
+	}
+
+	return nil, false
+}
+
+// toCamelCase converts snake_case to camelCase
+func toCamelCase(s string) string {
+	parts := strings.Split(s, "_")
+	if len(parts) == 1 {
+		return s
+	}
+	result := parts[0]
+	for i := 1; i < len(parts); i++ {
+		if len(parts[i]) > 0 {
+			result += strings.ToUpper(parts[i][:1]) + parts[i][1:]
+		}
+	}
+	return result
+}
+
+// toSnakeCase converts camelCase to snake_case
+func toSnakeCase(s string) string {
+	if s == "" {
+		return ""
+	}
+
+	var result strings.Builder
+	for i, r := range s {
+		if i > 0 && unicode.IsUpper(r) {
+			result.WriteByte('_')
+		}
+		result.WriteRune(unicode.ToLower(r))
+	}
+	return result.String()
 }
 
 // deepEqual performs deep equality check with better implementation
@@ -478,12 +533,28 @@ func (s *searcher) search(query Query) (*Result, error) {
 		return nil, s.wrap(err)
 	}
 
+	// Collect all stubs first for stable sorting
+	var stubs []*Stub
 	for v := range seq {
 		stub, ok := v.(*Stub)
 		if !ok {
 			continue
 		}
+		stubs = append(stubs, stub)
+	}
 
+	// Sort stubs by ID for stable ordering when ranks are equal
+	// This ensures consistent results across multiple runs
+	for i := 0; i < len(stubs)-1; i++ {
+		for j := i + 1; j < len(stubs); j++ {
+			if stubs[i].ID.String() > stubs[j].ID.String() {
+				stubs[i], stubs[j] = stubs[j], stubs[i]
+			}
+		}
+	}
+
+	// Process stubs in sorted order
+	for _, stub := range stubs {
 		current := rankMatch(query, stub)
 
 		if current > similarRank {
@@ -643,12 +714,28 @@ func (s *searcher) searchV2(query QueryV2) (*Result, error) {
 		return nil, s.wrap(err)
 	}
 
+	// Collect all stubs first for stable sorting
+	var stubs []*Stub
 	for v := range seq {
 		stub, ok := v.(*Stub)
 		if !ok {
 			continue
 		}
+		stubs = append(stubs, stub)
+	}
 
+	// Sort stubs by ID for stable ordering when ranks are equal
+	// This ensures consistent results across multiple runs
+	for i := 0; i < len(stubs)-1; i++ {
+		for j := i + 1; j < len(stubs); j++ {
+			if stubs[i].ID.String() > stubs[j].ID.String() {
+				stubs[i], stubs[j] = stubs[j], stubs[i]
+			}
+		}
+	}
+
+	// Process stubs in sorted order
+	for _, stub := range stubs {
 		current := rankMatchV2(query, stub)
 
 		if current > similarRank {

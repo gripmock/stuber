@@ -1142,3 +1142,164 @@ func TestBidiStreamingEdgeCases(t *testing.T) {
 	require.NotNil(t, stubResult)
 	require.Equal(t, "Hello!", stubResult.Output.Data["response"])
 }
+
+// TestFieldNameVariations tests the field name variation matching
+func TestFieldNameVariations(t *testing.T) {
+	s := stuber.NewBudgerigar(features.New())
+
+	// Test stub with snake_case field
+	stub := &stuber.Stub{
+		ID:      uuid.New(),
+		Service: "TestService",
+		Method:  "Test",
+		Input: stuber.InputData{
+			Equals: map[string]any{"user_name": "john"},
+		},
+		Output: stuber.Output{
+			Data: map[string]any{"response": "Hello John!"},
+		},
+	}
+
+	s.PutMany(stub)
+
+	query := stuber.QueryBidi{
+		Service: "TestService",
+		Method:  "Test",
+	}
+
+	result, err := s.FindByQueryBidi(query)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	// Test with camelCase field (should match snake_case)
+	stubResult, err := result.Next(map[string]any{"userName": "john"})
+	require.NoError(t, err)
+	require.NotNil(t, stubResult)
+	require.Equal(t, "Hello John!", stubResult.Output.Data["response"])
+
+	// Test with exact snake_case field
+	stubResult2, err := result.Next(map[string]any{"user_name": "john"})
+	require.NoError(t, err)
+	require.NotNil(t, stubResult2)
+	require.Equal(t, "Hello John!", stubResult2.Output.Data["response"])
+}
+
+// TestCamelCaseVariations tests camelCase field matching
+func TestCamelCaseVariations(t *testing.T) {
+	s := stuber.NewBudgerigar(features.New())
+
+	// Test stub with camelCase field
+	stub := &stuber.Stub{
+		ID:      uuid.New(),
+		Service: "TestService",
+		Method:  "Test",
+		Input: stuber.InputData{
+			Equals: map[string]any{"userName": "john"},
+		},
+		Output: stuber.Output{
+			Data: map[string]any{"response": "Hello John!"},
+		},
+	}
+
+	s.PutMany(stub)
+
+	query := stuber.QueryBidi{
+		Service: "TestService",
+		Method:  "Test",
+	}
+
+	result, err := s.FindByQueryBidi(query)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	// Test with snake_case field (should match camelCase)
+	stubResult, err := result.Next(map[string]any{"user_name": "john"})
+	require.NoError(t, err)
+	require.NotNil(t, stubResult)
+	require.Equal(t, "Hello John!", stubResult.Output.Data["response"])
+
+	// Test with exact camelCase field
+	stubResult2, err := result.Next(map[string]any{"userName": "john"})
+	require.NoError(t, err)
+	require.NotNil(t, stubResult2)
+	require.Equal(t, "Hello John!", stubResult2.Output.Data["response"])
+}
+
+// TestComplexFieldVariations tests complex field name variations
+func TestComplexFieldVariations(t *testing.T) {
+	s := stuber.NewBudgerigar(features.New())
+
+	// Test stub with complex field names
+	stub := &stuber.Stub{
+		ID:      uuid.New(),
+		Service: "TestService",
+		Method:  "Test",
+		Input: stuber.InputData{
+			Equals: map[string]any{
+				"user_profile_data": "data",
+				"apiKey":            "key123",
+				"simple_field":      "value",
+			},
+		},
+		Output: stuber.Output{
+			Data: map[string]any{"response": "Success!"},
+		},
+	}
+
+	s.PutMany(stub)
+
+	query := stuber.QueryBidi{
+		Service: "TestService",
+		Method:  "Test",
+	}
+
+	result, err := s.FindByQueryBidi(query)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	// Test with camelCase variations
+	messageData := map[string]any{
+		"userProfileData": "data",   // should match user_profile_data
+		"api_key":         "key123", // should match apiKey
+		"simpleField":     "value",  // should match simple_field
+	}
+
+	stubResult, err := result.Next(messageData)
+	require.NoError(t, err)
+	require.NotNil(t, stubResult)
+	require.Equal(t, "Success!", stubResult.Output.Data["response"])
+}
+
+// TestEmptyFieldVariations tests edge cases with empty fields
+func TestEmptyFieldVariations(t *testing.T) {
+	s := stuber.NewBudgerigar(features.New())
+
+	stub := &stuber.Stub{
+		ID:      uuid.New(),
+		Service: "TestService",
+		Method:  "Test",
+		Input: stuber.InputData{
+			Equals: map[string]any{"": "empty_key"},
+		},
+		Output: stuber.Output{
+			Data: map[string]any{"response": "Empty key!"},
+		},
+	}
+
+	s.PutMany(stub)
+
+	query := stuber.QueryBidi{
+		Service: "TestService",
+		Method:  "Test",
+	}
+
+	result, err := s.FindByQueryBidi(query)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	// Test with empty key
+	stubResult, err := result.Next(map[string]any{"": "empty_key"})
+	require.NoError(t, err)
+	require.NotNil(t, stubResult)
+	require.Equal(t, "Empty key!", stubResult.Output.Data["response"])
+}
