@@ -34,6 +34,18 @@ linters:
       - linters:
           - dupl
         path: (.+)_test.go
+      - linters:
+          - cyclop
+        path: searcher.go
+        text: "func.*Next.*messageData"
+      - linters:
+          - cyclop
+        path: searcher.go
+        text: "func.*matchInputData"
+      - linters:
+          - gocognit
+        path: searcher.go
+        text: "func.*deepEqual"
     paths:
       - third_party$
       - builtin$

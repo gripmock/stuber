@@ -7,7 +7,7 @@ import (
 	"github.com/gripmock/stuber"
 )
 
-// TestMatchStreamV2 - tests stream matching in V2
+// TestMatchStreamV2 - tests stream matching in V2.
 func TestMatchStreamV2(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -78,6 +78,7 @@ func TestMatchStreamV2(t *testing.T) {
 				if tt.expected {
 					t.Errorf("Expected match but got error: %v", err)
 				}
+
 				return
 			}
 
@@ -89,7 +90,7 @@ func TestMatchStreamV2(t *testing.T) {
 	}
 }
 
-// TestMatchWithStreamV2 - tests combined matching in V2
+// TestMatchWithStreamV2 - tests combined matching in V2.
 func TestMatchWithStreamV2(t *testing.T) {
 	query := stuber.QueryV2{
 		Service: "test",
@@ -138,7 +139,7 @@ func TestMatchWithStreamV2(t *testing.T) {
 	}
 }
 
-// TestBackwardCompatibilityV2 - tests backward compatibility in V2
+// TestBackwardCompatibilityV2 - tests backward compatibility in V2.
 func TestBackwardCompatibilityV2(t *testing.T) {
 	query := stuber.QueryV2{
 		Service: "test",

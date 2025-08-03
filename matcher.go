@@ -18,14 +18,14 @@ func match(query Query, stub *Stub) bool {
 	return matchInput(query.Data, stub.Input)
 }
 
-// matchHeaders checks if query headers match stub headers
+// matchHeaders checks if query headers match stub headers.
 func matchHeaders(queryHeaders map[string]any, stubHeaders InputHeader) bool {
 	return equals(stubHeaders.Equals, queryHeaders, false) &&
 		contains(stubHeaders.Contains, queryHeaders, false) &&
 		matches(stubHeaders.Matches, queryHeaders, false)
 }
 
-// matchInput checks if query data matches stub input
+// matchInput checks if query data matches stub input.
 func matchInput(queryData map[string]any, stubInput InputData) bool {
 	return equals(stubInput.Equals, queryData, stubInput.IgnoreArrayOrder) &&
 		contains(stubInput.Contains, queryData, stubInput.IgnoreArrayOrder) &&
@@ -44,7 +44,7 @@ func rankMatch(query Query, stub *Stub) float64 {
 	return headersRank + rankInput(query.Data, stub.Input)
 }
 
-// rankHeaders ranks query headers against stub headers
+// rankHeaders ranks query headers against stub headers.
 func rankHeaders(queryHeaders map[string]any, stubHeaders InputHeader) float64 {
 	if stubHeaders.Len() == 0 {
 		return 0

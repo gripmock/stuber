@@ -809,6 +809,7 @@ func TestBudgerigarWithData(t *testing.T) {
 		if err.Error() != "stub not found" {
 			t.Fatalf("Expected 'stub not found' error, got %v", err)
 		}
+
 		return
 	}
 
@@ -831,6 +832,7 @@ func TestBudgerigarWithData(t *testing.T) {
 		if err.Error() != "stub not found" {
 			t.Fatalf("Expected 'stub not found' error, got %v", err)
 		}
+
 		return
 	}
 

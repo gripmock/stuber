@@ -68,6 +68,7 @@ func TestMatchData(t *testing.T) {
 				if tt.expected {
 					t.Errorf("Expected match but got error: %v", err)
 				}
+
 				return
 			}
 

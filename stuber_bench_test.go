@@ -505,7 +505,7 @@ func BenchmarkBidiStreaming(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		result, err := s.FindByQueryBidi(query)
 		if err != nil {
 			b.Fatal(err)

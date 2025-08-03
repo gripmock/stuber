@@ -22,6 +22,9 @@ var ErrMethodNotFound = errors.New("method not found")
 // ErrStubNotFound is returned when the stub is not found.
 var ErrStubNotFound = errors.New("stub not found")
 
+// PriorityMultiplier is used to boost priority in ranking calculations
+const PriorityMultiplier = 10000
+
 // searcher is a struct that manages the storage of search results.
 //
 // It contains a mutex for concurrent access, a map to store and retrieve
@@ -158,7 +161,7 @@ func (br *BidiResult) Next(messageData map[string]any) (*Stub, error) {
 		if br.stubMatchesCurrentMessage(stub, messageData) {
 			rank := br.rankStub(stub, query)
 			// Add priority to ranking with higher multiplier
-			priorityBonus := float64(stub.Priority) * 10000
+			priorityBonus := float64(stub.Priority) * PriorityMultiplier
 			totalRank := rank + priorityBonus
 
 			if totalRank > bestRank {
@@ -181,6 +184,7 @@ func (br *BidiResult) Next(messageData map[string]any) (*Stub, error) {
 	if bestStub != nil {
 		// Mark the stub as used
 		br.searcher.markV2(query, bestStub.ID)
+
 		return bestStub, nil
 	}
 
@@ -311,6 +315,7 @@ func toCamelCase(s string) string {
 			result += strings.ToUpper(parts[i][:1]) + parts[i][1:]
 		}
 	}
+
 	return result
 }
 
@@ -327,6 +332,7 @@ func toSnakeCase(s string) string {
 		}
 		result.WriteRune(unicode.ToLower(r))
 	}
+
 	return result.String()
 }
 
@@ -487,7 +493,12 @@ func (s *searcher) unused() []*Stub {
 }
 
 // searchCommon is a common search function that can be used by both search and searchV2
-func (s *searcher) searchCommon(service, method string, matchFunc func(*Stub) bool, rankFunc func(*Stub) float64, markFunc func(uuid.UUID)) (*Result, error) {
+func (s *searcher) searchCommon(
+	service, method string,
+	matchFunc func(*Stub) bool,
+	rankFunc func(*Stub) float64,
+	markFunc func(uuid.UUID),
+) (*Result, error) {
 	var (
 		found       *Stub
 		foundRank   float64
@@ -517,7 +528,7 @@ func (s *searcher) searchCommon(service, method string, matchFunc func(*Stub) bo
 	for _, stub := range stubs {
 		current := rankFunc(stub)
 		// Add priority to ranking with higher multiplier
-		priorityBonus := float64(stub.Priority) * 10000
+		priorityBonus := float64(stub.Priority) * PriorityMultiplier
 		totalRank := current + priorityBonus
 
 		if totalRank > similarRank {

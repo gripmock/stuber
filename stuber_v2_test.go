@@ -1356,7 +1356,7 @@ func TestStableSortingOptimized(t *testing.T) {
 
 	// Run multiple times to ensure stable results
 	var firstResult *stuber.Stub
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		result, err := s.FindByQueryBidi(query)
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -1369,7 +1369,7 @@ func TestStableSortingOptimized(t *testing.T) {
 			firstResult = stubResult
 		} else {
 			// Should always return the same stub due to stable sorting
-			require.Equal(t, firstResult.ID, stubResult.ID, "Stable sorting failed on iteration %d", i)
+			require.Equal(t, firstResult.ID, stubResult.ID, "Stable sorting failed")
 		}
 	}
 }
