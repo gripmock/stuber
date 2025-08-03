@@ -486,8 +486,13 @@ func (s *searcher) unused() []*Stub {
 	return unused
 }
 
+<<<<<<< Updated upstream
 // searchCommon is a common search function that can be used by both search and searchV2
 func (s *searcher) searchCommon(service, method string, matchFunc func(*Stub) bool, rankFunc func(*Stub) float64, markFunc func(uuid.UUID)) (*Result, error) {
+=======
+// searchGeneric is a generic search function that can be used by both search and searchV2
+func (s *searcher) searchGeneric[T any](query T, matchFunc func(T, *Stub) bool, rankFunc func(T, *Stub) float64, markFunc func(T, uuid.UUID)) (*Result, error) {
+>>>>>>> Stashed changes
 	var (
 		found       *Stub
 		foundRank   float64
@@ -495,6 +500,20 @@ func (s *searcher) searchCommon(service, method string, matchFunc func(*Stub) bo
 		similarRank float64
 	)
 
+<<<<<<< Updated upstream
+=======
+	// Extract service and method from query
+	var service, method string
+	switch q := any(query).(type) {
+	case Query:
+		service, method = q.Service, q.Method
+	case QueryV2:
+		service, method = q.Service, q.Method
+	default:
+		return nil, ErrStubNotFound
+	}
+
+>>>>>>> Stashed changes
 	seq, err := s.storage.findAll(service, method)
 	if err != nil {
 		return nil, s.wrap(err)
@@ -515,7 +534,11 @@ func (s *searcher) searchCommon(service, method string, matchFunc func(*Stub) bo
 
 	// Process stubs in sorted order
 	for _, stub := range stubs {
+<<<<<<< Updated upstream
 		current := rankFunc(stub)
+=======
+		current := rankFunc(query, stub)
+>>>>>>> Stashed changes
 		// Add priority to ranking with higher multiplier
 		priorityBonus := float64(stub.Priority) * 10000
 		totalRank := current + priorityBonus
@@ -524,13 +547,21 @@ func (s *searcher) searchCommon(service, method string, matchFunc func(*Stub) bo
 			similar, similarRank = stub, totalRank
 		}
 
+<<<<<<< Updated upstream
 		if matchFunc(stub) && totalRank > foundRank {
+=======
+		if matchFunc(query, stub) && totalRank > foundRank {
+>>>>>>> Stashed changes
 			found, foundRank = stub, totalRank
 		}
 	}
 
 	if found != nil {
+<<<<<<< Updated upstream
 		markFunc(found.ID)
+=======
+		markFunc(query, found.ID)
+>>>>>>> Stashed changes
 
 		return &Result{found: found}, nil
 	}
@@ -598,10 +629,14 @@ func (s *searcher) searchByID(query Query) (*Result, error) {
 // - *Result: The Result containing the found Stub value (if any), or nil.
 // - error: An error if the search fails.
 func (s *searcher) search(query Query) (*Result, error) {
+<<<<<<< Updated upstream
 	return s.searchCommon(query.Service, query.Method,
 		func(stub *Stub) bool { return match(query, stub) },
 		func(stub *Stub) float64 { return rankMatch(query, stub) },
 		func(id uuid.UUID) { s.mark(query, id) })
+=======
+	return s.searchGeneric(query, match, rankMatch, func(q Query, id uuid.UUID) { s.mark(q, id) })
+>>>>>>> Stashed changes
 }
 
 // mark marks the given Stub value as used in the searcher.

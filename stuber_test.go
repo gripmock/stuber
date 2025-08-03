@@ -253,9 +253,14 @@ func TestBudgerigar_SearchWithPackageAndWithoutPackage(t *testing.T) {
 
 	require.Empty(t, s.Unused())
 
+	// Use fixed UUIDs to ensure stable sorting
+	id1 := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	id2 := uuid.MustParse("00000000-0000-0000-0000-000000000002")
+	id3 := uuid.MustParse("00000000-0000-0000-0000-000000000003")
+
 	stubs := []*stuber.Stub{
 		{
-			ID:      uuid.New(),
+			ID:      id1,
 			Service: "helloworld.v1.Gripmock",
 			Method:  "SayHello",
 			Input: stuber.InputData{Equals: map[string]any{
@@ -266,7 +271,7 @@ func TestBudgerigar_SearchWithPackageAndWithoutPackage(t *testing.T) {
 			}},
 		},
 		{
-			ID:      uuid.New(),
+			ID:      id2,
 			Service: "Gripmock",
 			Method:  "SayHello",
 			Input: stuber.InputData{Equals: map[string]any{
@@ -277,7 +282,7 @@ func TestBudgerigar_SearchWithPackageAndWithoutPackage(t *testing.T) {
 			}},
 		},
 		{
-			ID:      uuid.New(),
+			ID:      id3,
 			Service: "Gripmock",
 			Method:  "SayHello",
 			Input: stuber.InputData{Equals: map[string]any{
@@ -330,8 +335,11 @@ func TestBudgerigar_SearchWithPackageAndWithoutPackage(t *testing.T) {
 		require.Len(t, items, expectedCount)
 	}
 
+	// Due to the storage logic that includes truncated service names,
+	// "helloworld.v1.Gripmock" will also find stubs for "Gripmock"
+	// So we expect 3 stubs total (1 for helloworld.v1.Gripmock + 2 for Gripmock)
 	checkItems("helloworld.v1.Gripmock", 3)
-	checkItems("Gripmock", 2)
+	checkItems("Gripmock", 2) // Only the stubs for Gripmock service
 }
 
 func TestBudgerigar_SearchEmpty(t *testing.T) {
