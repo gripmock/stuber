@@ -119,6 +119,7 @@ func matchV2(query QueryV2, stub *Stub) bool {
 	// If no stream in stub, check unary case (one element in input)
 	if len(query.Input) == 1 {
 		queryItem := query.Input[0]
+
 		return matchInput(queryItem, stub.Input)
 	}
 
@@ -141,6 +142,7 @@ func rankMatchV2(query QueryV2, stub *Stub) float64 {
 	// If no stream in stub, rank unary case (one element in input)
 	if len(query.Input) == 1 {
 		queryItem := query.Input[0]
+
 		return headersRank + rankInput(queryItem, stub.Input)
 	}
 

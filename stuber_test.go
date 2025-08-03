@@ -8,9 +8,8 @@ import (
 
 	"github.com/bavix/features"
 	"github.com/google/uuid"
-	"github.com/stretchr/testify/require"
-
 	"github.com/gripmock/stuber"
+	"github.com/stretchr/testify/require"
 )
 
 func TestFindByNotFound(t *testing.T) {

@@ -5,7 +5,6 @@ import (
 
 	"github.com/bavix/features"
 	"github.com/google/uuid"
-
 	"github.com/gripmock/stuber"
 )
 

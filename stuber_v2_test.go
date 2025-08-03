@@ -2,14 +2,14 @@ package stuber_test
 
 import (
 	"bytes"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/bavix/features"
 	"github.com/google/uuid"
-	"github.com/stretchr/testify/require"
-
 	"github.com/gripmock/stuber"
+	"github.com/stretchr/testify/require"
 )
 
 // V2 equivalents of V1 tests
@@ -119,7 +119,6 @@ func TestPutMany_FixIDV2(t *testing.T) {
 func TestUpdateManyV2(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New())
 
-	
 	stub1 := &stuber.Stub{ID: uuid.New(), Service: "Greeter1", Method: "SayHello1"}
 	stub2 := &stuber.Stub{ID: uuid.New(), Service: "Greeter2", Method: "SayHello2"}
 
@@ -507,7 +506,7 @@ func TestBudgerigar_FindByQuery_WithIDV2(t *testing.T) {
 func TestNewQueryV2(t *testing.T) {
 	// Test creating QueryV2 from HTTP request
 	jsonBody := `{"service":"test","method":"test","input":[{"key":"value"}]}`
-	req := httptest.NewRequest("POST", "/", bytes.NewBufferString(jsonBody))
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
 
 	query, err := stuber.NewQueryV2(req)
@@ -555,7 +554,7 @@ func TestV2StubMethods(t *testing.T) {
 func TestV2QueryFunctions(t *testing.T) {
 	// Test NewQuery and RequestInternal for V1 Query
 	jsonBody := `{"service":"test","method":"test","data":{"key":"value"}}`
-	req := httptest.NewRequest("POST", "/", bytes.NewBufferString(jsonBody))
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
 
 	query, err := stuber.NewQuery(req)
