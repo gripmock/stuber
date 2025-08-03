@@ -48,7 +48,7 @@ func TestMatchStreamV2(t *testing.T) {
 				{Equals: map[string]any{"key1": "value1"}},
 				{Equals: map[string]any{"key2": "value2"}},
 			},
-			expected: false,
+			expected: true, // For bidirectional streaming, single message can match any stub item
 		},
 		{
 			name:       "element mismatch",

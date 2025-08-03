@@ -128,15 +128,20 @@ func (br *BidiResult) Next(messageData map[string]any) (*Stub, error) {
 				br.matchingStubs = append(br.matchingStubs, stub)
 			}
 		}
+
 		br.messageCount.Store(0)
+
+		// Reset matching stubs for new conversation
 	} else {
 		// Filter existing matching stubs - remove those that don't match the new message
 		var filteredStubs []*Stub
+
 		for _, stub := range br.matchingStubs {
 			if br.stubMatchesMessage(stub, messageData) {
 				filteredStubs = append(filteredStubs, stub)
 			}
 		}
+
 		br.matchingStubs = filteredStubs
 		br.messageCount.Add(1)
 	}
@@ -158,6 +163,7 @@ func (br *BidiResult) Next(messageData map[string]any) (*Stub, error) {
 	for _, stub := range br.matchingStubs {
 		// For bidirectional streaming, rank based on the specific message index
 		var rank float64
+
 		if stub.IsBidirectional() && len(stub.Stream) > 0 {
 			// Check if we have a stream element for this message index
 			if messageIndex < len(stub.Stream) {
@@ -207,10 +213,16 @@ func (br *BidiResult) Next(messageData map[string]any) (*Stub, error) {
 			Input:   []map[string]any{messageData},
 		}
 		br.searcher.markV2(query, bestStub.ID)
+
 		return bestStub, nil
 	}
 
 	return nil, ErrStubNotFound
+}
+
+// GetMessageIndex returns the current message index in the bidirectional stream.
+func (br *BidiResult) GetMessageIndex() int {
+	return int(br.messageCount.Load())
 }
 
 // stubMatchesMessage checks if a stub matches the given message.
@@ -225,6 +237,7 @@ func (br *BidiResult) stubMatchesMessage(stub *Stub, messageData map[string]any)
 					return true
 				}
 			}
+
 			return false
 		}
 		// Old format: use Input for matching (backward compatibility)
@@ -238,6 +251,7 @@ func (br *BidiResult) stubMatchesMessage(stub *Stub, messageData map[string]any)
 				return true
 			}
 		}
+
 		return false
 	}
 
@@ -266,17 +280,20 @@ func (br *BidiResult) rankInputData(inputData InputData, messageData map[string]
 	// Rank Equals - each match gives high weight
 	if len(inputData.Equals) > 0 {
 		equalsRank := 0.0
+
 		for key, expectedValue := range inputData.Equals {
 			if actualValue, exists := br.findValueWithVariations(messageData, key); exists && deepEqual(actualValue, expectedValue) {
 				equalsRank += 100.0 // High weight for exact matches
 			}
 		}
+
 		totalRank += equalsRank
 	}
 
 	// Rank Contains - each match gives medium weight
 	if len(inputData.Contains) > 0 {
 		containsRank := 0.0
+
 		for key, expectedValue := range inputData.Contains {
 			actualValue, exists := messageData[key]
 			if exists {
@@ -287,12 +304,14 @@ func (br *BidiResult) rankInputData(inputData InputData, messageData map[string]
 				}
 			}
 		}
+
 		totalRank += containsRank
 	}
 
 	// Rank Matches - each match gives medium weight
 	if len(inputData.Matches) > 0 {
 		matchesRank := 0.0
+
 		for key, expectedValue := range inputData.Matches {
 			actualValue, exists := messageData[key]
 			if exists {
@@ -303,6 +322,7 @@ func (br *BidiResult) rankInputData(inputData InputData, messageData map[string]
 				}
 			}
 		}
+
 		totalRank += matchesRank
 	}
 
@@ -489,11 +509,6 @@ func (br *BidiResult) rankStub(stub *Stub, query QueryV2) float64 {
 	return rankMatchV2(query, stub)
 }
 
-// GetMessageIndex returns the current message index in the bidirectional stream.
-func (br *BidiResult) GetMessageIndex() int {
-	return int(br.messageCount.Load())
-}
-
 // upsert inserts the given stub values into the searcher. If a stub value
 // already exists with the same key, it is updated.
 //
@@ -641,6 +656,7 @@ func (s *searcher) searchCommon(
 
 	if found != nil {
 		markFunc(found.ID)
+
 		return &Result{found: found}, nil
 	}
 
@@ -841,16 +857,12 @@ func (s *searcher) searchV2(query QueryV2) (*Result, error) {
 }
 
 // markV2 marks the given Stub value as used in the searcher.
-func (s *searcher) markV2(query QueryV2, id uuid.UUID) {
-	// If the query's RequestInternal flag is set, skip the mark
-	if query.RequestInternal() {
-		return
-	}
+func (s *searcher) markV2(query QueryV2, id uuid.UUID) { //nolint:revive
+	// Mark stub as used
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	// TEMPORARILY DISABLED FOR TESTING - allow stubs to be reused
-	// s.mu.Lock()
-	// defer s.mu.Unlock()
-	// s.stubUsed[id] = struct{}{}
+	s.stubUsed[id] = struct{}{}
 }
 
 func collectStubs(seq iter.Seq[Value]) []*Stub {

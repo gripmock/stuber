@@ -88,11 +88,13 @@ func equals(expected map[string]any, actual any, orderIgnore bool) bool {
 
 		// Use simple string comparison for strings
 		expectedStr, expectedIsStr := expectedValue.(string)
+
 		actualStr, actualIsStr := actualValue.(string)
 		if expectedIsStr && actualIsStr {
 			if expectedStr != actualStr {
 				return false
 			}
+
 			continue
 		}
 
@@ -104,16 +106,19 @@ func equals(expected map[string]any, actual any, orderIgnore bool) bool {
 				if expectedNum != actualNum {
 					return false
 				}
+
 				continue
 			case int:
 				if expectedNum != float64(actualNum) {
 					return false
 				}
+
 				continue
 			case int64:
 				if expectedNum != float64(actualNum) {
 					return false
 				}
+
 				continue
 			}
 		case int:
@@ -122,16 +127,19 @@ func equals(expected map[string]any, actual any, orderIgnore bool) bool {
 				if float64(expectedNum) != actualNum {
 					return false
 				}
+
 				continue
 			case int:
 				if expectedNum != actualNum {
 					return false
 				}
+
 				continue
 			case int64:
 				if expectedNum != int(actualNum) {
 					return false
 				}
+
 				continue
 			}
 		case int64:
@@ -140,27 +148,32 @@ func equals(expected map[string]any, actual any, orderIgnore bool) bool {
 				if float64(expectedNum) != actualNum {
 					return false
 				}
+
 				continue
 			case int:
 				if int64(actualNum) != expectedNum {
 					return false
 				}
+
 				continue
 			case int64:
 				if expectedNum != actualNum {
 					return false
 				}
+
 				continue
 			}
 		}
 
 		// Use simple bool comparison for booleans
 		expectedBool, expectedIsBool := expectedValue.(bool)
+
 		actualBool, actualIsBool := actualValue.(bool)
 		if expectedIsBool && actualIsBool {
 			if expectedBool != actualBool {
 				return false
 			}
+
 			continue
 		}
 
@@ -224,6 +237,7 @@ func matchV2(query QueryV2, stub *Stub) bool {
 	// If no stream in stub, check unary case (one element in input)
 	if len(query.Input) == 1 {
 		queryItem := query.Input[0]
+
 		return matchInput(queryItem, stub.Input)
 	}
 
@@ -246,6 +260,7 @@ func rankMatchV2(query QueryV2, stub *Stub) float64 {
 	// If no stream in stub, rank unary case (one element in input)
 	if len(query.Input) == 1 {
 		queryItem := query.Input[0]
+
 		return headersRank + rankInput(queryItem, stub.Input)
 	}
 
@@ -299,6 +314,7 @@ func matchStreamElements(queryStream []map[string]any, stubStream []InputData) b
 				}
 			}
 		}
+
 		return false
 	}
 
@@ -312,7 +328,7 @@ func matchStreamElements(queryStream []map[string]any, stubStream []InputData) b
 		return false
 	}
 
-	for i := 0; i < effectiveQueryLength; i++ {
+	for i := range effectiveQueryLength {
 		queryItem := queryStream[i]
 		stubItem := stubStream[i]
 
@@ -343,6 +359,7 @@ func matchStreamElements(queryStream []map[string]any, stubStream []InputData) b
 			}
 		}
 	}
+
 	return true
 }
 
@@ -374,6 +391,7 @@ func rankStreamElements(queryStream []map[string]any, stubStream []InputData) fl
 
 			// Use the same logic as before for element rank
 			equalsRank := 0.0
+
 			if len(stubItem.Equals) > 0 {
 				if equals(stubItem.Equals, queryItem, stubItem.IgnoreArrayOrder) {
 					equalsRank = 1.0
@@ -381,9 +399,10 @@ func rankStreamElements(queryStream []map[string]any, stubStream []InputData) fl
 					equalsRank = 0.0
 				}
 			}
+
 			containsRank := deeply.RankMatch(stubItem.Contains, queryItem)
 			matchesRank := deeply.RankMatch(stubItem.Matches, queryItem)
-			elementRank := equalsRank*100.0 + containsRank*0.1 + matchesRank*0.1
+			elementRank := equalsRank*100.0 + containsRank*0.1 + matchesRank*0.1 //nolint:mnd
 
 			if elementRank > bestRank {
 				bestRank = elementRank
@@ -393,13 +412,14 @@ func rankStreamElements(queryStream []map[string]any, stubStream []InputData) fl
 		// Give bonus for bidirectional streaming match
 		bidirectionalBonus := 500.0
 		finalRank := bestRank + bidirectionalBonus
+
 		return finalRank
 	}
 
 	// For client streaming, if lengths don't match, return very low rank
 	if effectiveQueryLength != len(stubStream) {
 		// For client streaming, length must match exactly
-		return 0.1
+		return 0.1 //nolint:mnd
 	}
 
 	// STRICT: If query stream is empty but stub expects data, no rank
@@ -407,14 +427,17 @@ func rankStreamElements(queryStream []map[string]any, stubStream []InputData) fl
 		return 0
 	}
 
-	var totalRank float64
-	var perfectMatches int
+	var (
+		totalRank      float64
+		perfectMatches int
+	)
 
-	for i := 0; i < effectiveQueryLength; i++ {
+	for i := range effectiveQueryLength {
 		queryItem := queryStream[i]
 		stubItem := stubStream[i]
 		// Use the same logic as before for element rank
 		equalsRank := 0.0
+
 		if len(stubItem.Equals) > 0 {
 			if equals(stubItem.Equals, queryItem, stubItem.IgnoreArrayOrder) {
 				equalsRank = 1.0
@@ -422,18 +445,20 @@ func rankStreamElements(queryStream []map[string]any, stubStream []InputData) fl
 				equalsRank = 0.0
 			}
 		}
+
 		containsRank := deeply.RankMatch(stubItem.Contains, queryItem)
 		matchesRank := deeply.RankMatch(stubItem.Matches, queryItem)
-		elementRank := equalsRank*100.0 + containsRank*0.1 + matchesRank*0.1
+		elementRank := equalsRank*100.0 + containsRank*0.1 + matchesRank*0.1 //nolint:mnd
 		totalRank += elementRank
-		if equalsRank > 0.99 {
+
+		if equalsRank > 0.99 { //nolint:mnd
 			perfectMatches++
 		}
 	}
 	// For client streaming, accumulate rank based on received messages
 	// Each message contributes to the total rank
-	lengthBonus := float64(effectiveQueryLength) * 10.0   // Moderate bonus for length
-	perfectMatchBonus := float64(perfectMatches) * 1000.0 // High bonus for perfect matches
+	lengthBonus := float64(effectiveQueryLength) * 10.0   // Moderate bonus for length // nolint:mnd
+	perfectMatchBonus := float64(perfectMatches) * 1000.0 // High bonus for perfect matches // nolint:mnd
 
 	// Give bonus for complete match (all received messages match perfectly)
 	completeMatchBonus := 0.0
@@ -443,28 +468,36 @@ func rankStreamElements(queryStream []map[string]any, stubStream []InputData) fl
 
 	// Add specificity bonus - more specific matchers = higher specificity
 	specificityBonus := 0.0
+
 	for _, stubItem := range stubStream {
 		// Count actual matchers, not just field count
 		equalsCount := 0
+
 		for _, v := range stubItem.Equals {
 			if v != nil {
 				equalsCount++
 			}
 		}
+
 		containsCount := 0
+
 		for _, v := range stubItem.Contains {
 			if v != nil {
 				containsCount++
 			}
 		}
+
 		matchesCount := 0
+
 		for _, v := range stubItem.Matches {
 			if v != nil {
 				matchesCount++
 			}
 		}
+
 		specificityBonus += float64(equalsCount + containsCount + matchesCount)
 	}
+
 	specificityBonus *= 50.0 // Medium weight for specificity
 
 	finalRank := totalRank + lengthBonus + perfectMatchBonus + completeMatchBonus + specificityBonus

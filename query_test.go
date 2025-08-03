@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/bavix/features"
@@ -81,4 +82,23 @@ func TestNewQuery_InvalidJSON(t *testing.T) {
 
 	_, err := NewQuery(req)
 	require.Error(t, err)
+}
+
+func TestNewQueryBidi(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString(`{"service":"svc","method":"mthd","headers":{"h":"v"}}`))
+	req.Header.Set("Content-Type", "application/json")
+	q, err := NewQueryBidi(req)
+	require.NoError(t, err)
+	require.Equal(t, "svc", q.Service)
+	require.Equal(t, "mthd", q.Method)
+	require.Equal(t, "v", q.Headers["h"])
+}
+
+func TestRequestInternalBidi(t *testing.T) {
+	q := QueryBidi{
+		Service: "svc",
+		Method:  "mthd",
+		Headers: map[string]any{"h": "v"},
+	}
+	require.False(t, q.RequestInternal())
 }

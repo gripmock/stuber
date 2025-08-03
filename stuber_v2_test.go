@@ -456,15 +456,11 @@ func TestBudgerigar_UsedV2(t *testing.T) {
 		Input:   []map[string]any{{"key": "value"}},
 	}
 
-	stub := &stuber.Stub{
-		Service: "Greeter1",
-		Method:  "SayHello1",
-		Input: stuber.InputData{
-			Equals: map[string]any{"key": "value"},
-		},
+	// Update stub1 to have matching input
+	stub1.Input = stuber.InputData{
+		Equals: map[string]any{"key": "value"},
 	}
-
-	s.PutMany(stub)
+	s.UpdateMany(stub1)
 	result, err := s.FindByQueryV2(query)
 	require.NoError(t, err)
 	require.NotNil(t, result.Found())
@@ -670,17 +666,17 @@ func TestV2MatcherFunctions(t *testing.T) {
 func TestBidiStreaming(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New())
 
-	// Create unary stubs for bidirectional streaming
-	// Each message in bidirectional streaming is treated as a separate unary request
-	unaryStub1 := &stuber.Stub{
+	// Create bidirectional stubs for bidirectional streaming
+	// Each stub has Stream data for input matching
+	bidiStub1 := &stuber.Stub{
 		ID:      uuid.New(),
 		Service: "ChatService",
 		Method:  "Chat",
 		Headers: stuber.InputHeader{
 			Equals: map[string]any{"content-type": "application/json"},
 		},
-		Input: stuber.InputData{
-			Equals: map[string]any{"message": "hello"},
+		Stream: []stuber.InputData{
+			{Equals: map[string]any{"message": "hello"}},
 		},
 		Output: stuber.Output{
 			Stream: []any{
@@ -691,37 +687,37 @@ func TestBidiStreaming(t *testing.T) {
 		},
 	}
 
-	unaryStub2 := &stuber.Stub{
+	bidiStub2 := &stuber.Stub{
 		ID:      uuid.New(),
 		Service: "ChatService",
 		Method:  "Chat",
 		Headers: stuber.InputHeader{
 			Equals: map[string]any{"content-type": "application/json"},
 		},
-		Input: stuber.InputData{
-			Equals: map[string]any{"message": "how are you"},
+		Stream: []stuber.InputData{
+			{Equals: map[string]any{"message": "how are you"}},
 		},
 		Output: stuber.Output{
 			Data: map[string]any{"response": "I'm doing great!"},
 		},
 	}
 
-	unaryStub3 := &stuber.Stub{
+	bidiStub3 := &stuber.Stub{
 		ID:      uuid.New(),
 		Service: "ChatService",
 		Method:  "Chat",
 		Headers: stuber.InputHeader{
 			Equals: map[string]any{"content-type": "application/json"},
 		},
-		Input: stuber.InputData{
-			Equals: map[string]any{"message": "goodbye"},
+		Stream: []stuber.InputData{
+			{Equals: map[string]any{"message": "goodbye"}},
 		},
 		Output: stuber.Output{
 			Data: map[string]any{"response": "Goodbye! See you later!"},
 		},
 	}
 
-	s.PutMany(unaryStub1, unaryStub2, unaryStub3)
+	s.PutMany(bidiStub1, bidiStub2, bidiStub3)
 
 	// Test bidirectional streaming
 	t.Run("BidiStreamingWithUnaryStubs", func(t *testing.T) {
@@ -735,24 +731,24 @@ func TestBidiStreaming(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, result)
 
-		// Test first message - should match unaryStub1 (server streaming)
+		// Test first message - should match bidiStub1 (server streaming)
 		stub, err := result.Next(map[string]any{"message": "hello"})
 		require.NoError(t, err)
-		require.Equal(t, unaryStub1.ID, stub.ID)
+		require.Equal(t, bidiStub1.ID, stub.ID)
 		require.Len(t, stub.Output.Stream, 3)
 		require.Empty(t, stub.Output.Data)
 
-		// Test second message - should match unaryStub2 (unary)
+		// Test second message - should match bidiStub2 (unary)
 		stub, err = result.Next(map[string]any{"message": "how are you"})
 		require.NoError(t, err)
-		require.Equal(t, unaryStub2.ID, stub.ID)
+		require.Equal(t, bidiStub2.ID, stub.ID)
 		require.Equal(t, "I'm doing great!", stub.Output.Data["response"])
 		require.Empty(t, stub.Output.Stream)
 
-		// Test third message - should match unaryStub3 (unary)
+		// Test third message - should match bidiStub3 (unary)
 		stub, err = result.Next(map[string]any{"message": "goodbye"})
 		require.NoError(t, err)
-		require.Equal(t, unaryStub3.ID, stub.ID)
+		require.Equal(t, bidiStub3.ID, stub.ID)
 		require.Equal(t, "Goodbye! See you later!", stub.Output.Data["response"])
 		require.Empty(t, stub.Output.Stream)
 
@@ -887,9 +883,9 @@ func TestBidiStreamingWithServerStream(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
-	// Test that the stub is correctly identified as server streaming and bidirectional
+	// Test that the stub is correctly identified as server streaming but not bidirectional
 	require.True(t, bidiStub.IsServerStream())
-	require.True(t, bidiStub.IsBidirectional()) // Bidirectional is essentially server streaming
+	require.False(t, bidiStub.IsBidirectional()) // This stub has Input (unary) + Output.Stream (server streaming), not bidirectional
 
 	// Test message matching
 	stub, err := result.Next(map[string]any{"message": "hello"})
