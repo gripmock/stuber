@@ -48,7 +48,6 @@ func (b *Budgerigar) PutMany(values ...*Stub) []uuid.UUID {
 	}
 
 	return b.searcher.upsert(values...)
-	return b.searcher.upsert(values...)
 }
 
 // UpdateMany updates the given Stub values in the Budgerigar. Only Stub values
