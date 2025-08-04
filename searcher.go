@@ -86,8 +86,9 @@ type BidiResult struct {
 	mu            sync.RWMutex // Thread safety for concurrent access
 }
 
-// Next finds a matching stub for the given message data.
-// Each call to Next filters the matching stubs based on the new message.
+// Next processes the next message in the bidirectional stream and returns the matching stub.
+//
+//nolint:gocognit,cyclop,funlen
 func (br *BidiResult) Next(messageData map[string]any) (*Stub, error) {
 	br.mu.Lock()
 	defer br.mu.Unlock()
@@ -108,6 +109,7 @@ func (br *BidiResult) Next(messageData map[string]any) (*Stub, error) {
 	}
 
 	// If this is the first call, initialize matching stubs
+	//nolint:nestif
 	if len(br.matchingStubs) == 0 {
 		// Get all stubs for this service/method
 		seq, err := br.searcher.storage.findAll(br.service, br.method)
@@ -130,8 +132,6 @@ func (br *BidiResult) Next(messageData map[string]any) (*Stub, error) {
 		}
 
 		br.messageCount.Store(0)
-
-		// Reset matching stubs for new conversation
 	} else {
 		// Filter existing matching stubs - remove those that don't match the new message
 		var filteredStubs []*Stub
@@ -269,6 +269,8 @@ func (br *BidiResult) stubMatchesMessage(stub *Stub, messageData map[string]any)
 }
 
 // rankInputData ranks how well messageData matches the given InputData.
+//
+//nolint:cyclop
 func (br *BidiResult) rankInputData(inputData InputData, messageData map[string]any) float64 {
 	// Early exit if InputData is empty
 	if len(inputData.Equals) == 0 && len(inputData.Contains) == 0 && len(inputData.Matches) == 0 {
@@ -857,7 +859,7 @@ func (s *searcher) searchV2(query QueryV2) (*Result, error) {
 }
 
 // markV2 marks the given Stub value as used in the searcher.
-func (s *searcher) markV2(query QueryV2, id uuid.UUID) { //nolint:revive
+func (s *searcher) markV2(_ QueryV2, id uuid.UUID) {
 	// Mark stub as used
 	s.mu.Lock()
 	defer s.mu.Unlock()

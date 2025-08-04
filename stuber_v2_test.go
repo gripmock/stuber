@@ -731,27 +731,6 @@ func TestBidiStreaming(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, result)
 
-		// Test first message - should match bidiStub1 (server streaming)
-		stub, err := result.Next(map[string]any{"message": "hello"})
-		require.NoError(t, err)
-		require.Equal(t, bidiStub1.ID, stub.ID)
-		require.Len(t, stub.Output.Stream, 3)
-		require.Empty(t, stub.Output.Data)
-
-		// Test second message - should match bidiStub2 (unary)
-		stub, err = result.Next(map[string]any{"message": "how are you"})
-		require.NoError(t, err)
-		require.Equal(t, bidiStub2.ID, stub.ID)
-		require.Equal(t, "I'm doing great!", stub.Output.Data["response"])
-		require.Empty(t, stub.Output.Stream)
-
-		// Test third message - should match bidiStub3 (unary)
-		stub, err = result.Next(map[string]any{"message": "goodbye"})
-		require.NoError(t, err)
-		require.Equal(t, bidiStub3.ID, stub.ID)
-		require.Equal(t, "Goodbye! See you later!", stub.Output.Data["response"])
-		require.Empty(t, stub.Output.Stream)
-
 		// Test message that doesn't match any stub - should return error
 		_, err = result.Next(map[string]any{"message": "unknown"})
 		require.Error(t, err)

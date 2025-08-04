@@ -64,10 +64,9 @@ func rankInput(queryData map[string]any, stubInput InputData) float64 {
 		deeply.RankMatch(stubInput.Matches, queryData)
 }
 
-// equals checks if the expected map matches the actual value.
+// equals compares two values for deep equality.
 //
-// It returns true if the expected map matches the actual value,
-// otherwise false.
+//nolint:gocognit,cyclop,gocyclo,funlen
 func equals(expected map[string]any, actual any, orderIgnore bool) bool {
 	if len(expected) == 0 {
 		return true
@@ -268,7 +267,9 @@ func rankMatchV2(query QueryV2, stub *Stub) float64 {
 	return headersRank
 }
 
-// matchStreamElements checks if query input matches stub stream element by element.
+// matchStreamElements checks if the query stream matches the stub stream.
+//
+//nolint:gocognit,cyclop,funlen
 func matchStreamElements(queryStream []map[string]any, stubStream []InputData) bool {
 	// For client streaming, grpctestify sends an extra empty message at the end
 	// We need to handle this case by checking if the last message is empty
@@ -294,24 +295,18 @@ func matchStreamElements(queryStream []map[string]any, stubStream []InputData) b
 			}
 
 			// Check equals matcher
-			if len(stubItem.Equals) > 0 {
-				if equals(stubItem.Equals, queryItem, stubItem.IgnoreArrayOrder) {
-					return true
-				}
+			if len(stubItem.Equals) > 0 && equals(stubItem.Equals, queryItem, stubItem.IgnoreArrayOrder) {
+				return true
 			}
 
 			// Check contains matcher
-			if len(stubItem.Contains) > 0 {
-				if contains(stubItem.Contains, queryItem, stubItem.IgnoreArrayOrder) {
-					return true
-				}
+			if len(stubItem.Contains) > 0 && contains(stubItem.Contains, queryItem, stubItem.IgnoreArrayOrder) {
+				return true
 			}
 
 			// Check matches matcher
-			if len(stubItem.Matches) > 0 {
-				if matches(stubItem.Matches, queryItem, stubItem.IgnoreArrayOrder) {
-					return true
-				}
+			if len(stubItem.Matches) > 0 && matches(stubItem.Matches, queryItem, stubItem.IgnoreArrayOrder) {
+				return true
 			}
 		}
 
@@ -319,9 +314,7 @@ func matchStreamElements(queryStream []map[string]any, stubStream []InputData) b
 	}
 
 	// For client streaming, allow partial matching for ranking purposes
-	if effectiveQueryLength != len(stubStream) {
-		// Don't return false here - let ranking handle it
-	}
+	// Length mismatch is handled in ranking function
 
 	// STRICT: If query stream is empty but stub expects data, no match
 	if effectiveQueryLength == 0 && len(stubStream) > 0 {
@@ -363,7 +356,9 @@ func matchStreamElements(queryStream []map[string]any, stubStream []InputData) b
 	return true
 }
 
-// rankStreamElements ranks how well query input matches stub stream element by element.
+// rankStreamElements ranks the match between query stream and stub stream.
+//
+//nolint:gocognit,cyclop,funlen
 func rankStreamElements(queryStream []map[string]any, stubStream []InputData) float64 {
 	// For client streaming, grpctestify sends an extra empty message at the end
 	// We need to handle this case by checking if the last message is empty
@@ -392,12 +387,8 @@ func rankStreamElements(queryStream []map[string]any, stubStream []InputData) fl
 			// Use the same logic as before for element rank
 			equalsRank := 0.0
 
-			if len(stubItem.Equals) > 0 {
-				if equals(stubItem.Equals, queryItem, stubItem.IgnoreArrayOrder) {
-					equalsRank = 1.0
-				} else {
-					equalsRank = 0.0
-				}
+			if len(stubItem.Equals) > 0 && equals(stubItem.Equals, queryItem, stubItem.IgnoreArrayOrder) {
+				equalsRank = 1.0
 			}
 
 			containsRank := deeply.RankMatch(stubItem.Contains, queryItem)
@@ -457,8 +448,10 @@ func rankStreamElements(queryStream []map[string]any, stubStream []InputData) fl
 	}
 	// For client streaming, accumulate rank based on received messages
 	// Each message contributes to the total rank
-	lengthBonus := float64(effectiveQueryLength) * 10.0   // Moderate bonus for length // nolint:mnd
-	perfectMatchBonus := float64(perfectMatches) * 1000.0 // High bonus for perfect matches // nolint:mnd
+	//nolint:mnd
+	lengthBonus := float64(effectiveQueryLength) * 10.0 // Moderate bonus for length
+	//nolint:mnd
+	perfectMatchBonus := float64(perfectMatches) * 1000.0 // High bonus for perfect matches
 
 	// Give bonus for complete match (all received messages match perfectly)
 	completeMatchBonus := 0.0

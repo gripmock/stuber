@@ -102,3 +102,13 @@ func TestRequestInternalBidi(t *testing.T) {
 	}
 	require.False(t, q.RequestInternal())
 }
+
+func TestRequestInternalV2(t *testing.T) {
+	q := QueryV2{
+		Service: "svc",
+		Method:  "mthd",
+		Headers: map[string]any{"h": "v"},
+		Input:   []map[string]any{{"key": "value"}},
+	}
+	require.False(t, q.RequestInternal())
+}
