@@ -15,6 +15,7 @@ func TestEmpty(t *testing.T) {
 	require.True(t, true)
 }
 
+//nolint:funlen
 func TestSearch_IgnoreArrayOrderAndFields(t *testing.T) {
 	s := newSearcher()
 
@@ -76,7 +77,9 @@ func TestSearch_IgnoreArrayOrderAndFields(t *testing.T) {
 	res, err := s.findV2(query)
 	require.NoError(t, err)
 	require.NotNil(t, res.Found())
-			require.Equal(t, 2, res.Found().Output.Data["process_id"].(int))
+	processID, ok := res.Found().Output.Data["process_id"].(int)
+	require.True(t, ok)
+	require.Equal(t, 2, processID)
 
 	// Request with the same array, but without request_timestamp
 	query2 := QueryV2{
@@ -94,9 +97,12 @@ func TestSearch_IgnoreArrayOrderAndFields(t *testing.T) {
 	res2, err2 := s.findV2(query2)
 	require.NoError(t, err2)
 	require.NotNil(t, res2.Found())
-			require.Equal(t, 1, res2.Found().Output.Data["process_id"].(int))
+	processID2, ok2 := res2.Found().Output.Data["process_id"].(int)
+	require.True(t, ok2)
+	require.Equal(t, 1, processID2)
 }
 
+//nolint:funlen
 func TestSearch_IgnoreArrayOrder_UserScenario(t *testing.T) {
 	s := newSearcher()
 
@@ -201,6 +207,7 @@ func TestSearch_IgnoreArrayOrder_UserScenario(t *testing.T) {
 	require.Equal(t, "1", res3.Found().Output.Data["processId"])
 }
 
+//nolint:funlen
 func TestSearch_IgnoreArrayOrder_V1API(t *testing.T) {
 	s := newSearcher()
 
@@ -285,6 +292,7 @@ func TestSearch_IgnoreArrayOrder_V1API(t *testing.T) {
 	require.Equal(t, "1", res2.Found().Output.Data["processId"])
 }
 
+//nolint:funlen
 func TestSearch_Specificity_AllCases(t *testing.T) {
 	s := newSearcher()
 
@@ -352,6 +360,7 @@ func TestSearch_Specificity_AllCases(t *testing.T) {
 	require.Equal(t, "stub2", res2.Found().Output.Data["result"])
 }
 
+//nolint:funlen
 func TestSearch_Specificity_StreamCase(t *testing.T) {
 	s := newSearcher()
 
@@ -431,6 +440,7 @@ func TestSearch_Specificity_StreamCase(t *testing.T) {
 	require.Equal(t, "stub2", res2.Found().Output.Data["result"])
 }
 
+//nolint:funlen
 func TestSearch_Specificity_WithContainsAndMatches(t *testing.T) {
 	s := newSearcher()
 

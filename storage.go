@@ -12,6 +12,17 @@ import (
 	"github.com/zeebo/xxh3"
 )
 
+const (
+	// smallCollectionThreshold is the threshold for using simple sorting instead of heap.
+	smallCollectionThreshold = 10
+	// smallItemsThreshold is the threshold for using simple sorting instead of heap.
+	smallItemsThreshold = 3
+	// twoItemsThreshold is the threshold for two items case.
+	twoItemsThreshold = 2
+	// stringCacheSize is the maximum number of string hashes to cache.
+	stringCacheSize = 10000
+)
+
 // ErrLeftNotFound is returned when the left value is not found.
 var ErrLeftNotFound = errors.New("left not found")
 
@@ -96,6 +107,8 @@ func (s *storage) yieldSortedValues(indexes []uint64, yield func(Value) bool) {
 }
 
 // yieldSortedValuesOptimized is an ultra-optimized version with minimal allocations.
+//
+//nolint:gocognit,cyclop,funlen,nestif
 func (s *storage) yieldSortedValuesOptimized(indexes []uint64, yield func(Value) bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -138,8 +151,8 @@ func (s *storage) yieldSortedValuesOptimized(indexes []uint64, yield func(Value)
 		return
 	}
 
-	// Fast path: small dataset (≤3 items) - use ultra-simple iteration
-	if totalItems <= 3 {
+	// Fast path: small dataset (≤smallItemsThreshold items) - use ultra-simple iteration
+	if totalItems <= smallItemsThreshold {
 		items := make([]Value, 0, totalItems)
 
 		// Collect items
@@ -152,12 +165,12 @@ func (s *storage) yieldSortedValuesOptimized(indexes []uint64, yield func(Value)
 		}
 
 		// Ultra-simple sort for 2-3 items
-		if len(items) == 2 {
+		if len(items) == twoItemsThreshold {
 			if items[0].Score() < items[1].Score() {
 				items[0], items[1] = items[1], items[0]
 			}
-		} else if len(items) == 3 {
-			// Manual sort for 3 items (faster than bubble sort)
+		} else if len(items) == smallItemsThreshold {
+			// Manual sort for smallItemsThreshold items (faster than bubble sort)
 			if items[0].Score() < items[1].Score() {
 				items[0], items[1] = items[1], items[0]
 			}
@@ -206,10 +219,15 @@ func (s *storage) countItemsFast(indexes []uint64) int {
 // scoreHeap implements heap.Interface for sorting by score.
 type scoreHeap []sortItem
 
-func (h scoreHeap) Len() int           { return len(h) }
-func (h scoreHeap) Less(i, j int) bool { return h[i].score > h[j].score }
-func (h scoreHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
-func (h *scoreHeap) Push(x any)        { *h = append(*h, x.(sortItem)) }
+func (h *scoreHeap) Len() int           { return len(*h) }
+func (h *scoreHeap) Less(i, j int) bool { return (*h)[i].score > (*h)[j].score }
+func (h *scoreHeap) Swap(i, j int)      { (*h)[i], (*h)[j] = (*h)[j], (*h)[i] }
+func (h *scoreHeap) Push(x any) {
+	if item, ok := x.(sortItem); ok {
+		*h = append(*h, item)
+	}
+}
+
 func (h *scoreHeap) Pop() any {
 	old := *h
 	n := len(old)
@@ -220,6 +238,8 @@ func (h *scoreHeap) Pop() any {
 }
 
 // yieldSortedValuesHeap uses heap-based sorting for O(N log N) performance.
+//
+//nolint:gocognit,cyclop,funlen
 func (s *storage) yieldSortedValuesHeap(indexes []uint64, yield func(Value) bool) {
 	// Ultra-fast path: single index with single value (most common case)
 	if len(indexes) == 1 {
@@ -235,10 +255,11 @@ func (s *storage) yieldSortedValuesHeap(indexes []uint64, yield func(Value) bool
 	}
 
 	// Fast path: single index with multiple values
+	//nolint:nestif
 	if len(indexes) == 1 {
 		if m, exists := s.items[indexes[0]]; exists {
 			// Use slice-based sorting for small collections (faster than heap)
-			if len(m) <= 10 {
+			if len(m) <= smallCollectionThreshold {
 				items := make([]sortItem, 0, len(m))
 				for _, v := range m {
 					items = append(items, sortItem{value: v, score: v.Score()})
@@ -284,7 +305,11 @@ func (s *storage) yieldSortedValuesHeap(indexes []uint64, yield func(Value) bool
 
 	// Extract elements in descending score order
 	for h.Len() > 0 {
-		item := heap.Pop(h).(sortItem)
+		item, ok := heap.Pop(h).(sortItem)
+		if !ok {
+			continue
+		}
+
 		if !yield(item.value) {
 			return
 		}
@@ -440,12 +465,15 @@ func (s *storage) del(keys ...uuid.UUID) int {
 }
 
 // Global LRU cache for string hashes with size limit.
+//
+//nolint:gochecknoglobals
 var globalStringCache *lru.Cache[string, uint32]
 
+//nolint:gochecknoinits
 func init() {
 	var err error
-	// Create LRU cache with size limit of 10000 entries
-	globalStringCache, err = lru.New[string, uint32](10000)
+	// Create LRU cache with size limit of stringCacheSize entries
+	globalStringCache, err = lru.New[string, uint32](stringCacheSize)
 	if err != nil {
 		panic("failed to create string hash cache: " + err.Error())
 	}
@@ -471,7 +499,7 @@ func clearStringHashCache() {
 
 // getStringHashCacheStats returns cache statistics.
 func getStringHashCacheStats() (int, int) {
-	return globalStringCache.Len(), 10000 // Fixed capacity
+	return globalStringCache.Len(), stringCacheSize // Fixed capacity
 }
 
 // ClearAllCaches clears all LRU caches (for testing purposes).

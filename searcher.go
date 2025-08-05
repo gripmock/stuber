@@ -24,6 +24,10 @@ const (
 	EmptySpecificity = 0
 	// MinStreamLength is the minimum length for stream calculations.
 	MinStreamLength = 0
+	// defaultStubCapacity is the default capacity for stub slices.
+	defaultStubCapacity = 16
+	// parallelProcessingThreshold is the threshold for using parallel processing.
+	parallelProcessingThreshold = 100
 )
 
 // ErrServiceNotFound is returned when the service is not found.
@@ -67,7 +71,7 @@ func newSearcher() *searcher {
 
 	// Initialize sync.Pool for temporary slices
 	s.v2Pool.New = func() any {
-		return make([]*Stub, 0, 16) // Pre-allocate with reasonable capacity
+		return make([]*Stub, 0, defaultStubCapacity) // Pre-allocate with reasonable capacity
 	}
 
 	// Initialize sync.Pool for Stub objects
@@ -930,7 +934,7 @@ func (s *searcher) processStubs(query QueryV2, stubs []*Stub) (*Result, error) {
 	}
 
 	// Parallel processing for multiple stubs
-	if len(stubs) >= 100 {
+	if len(stubs) >= parallelProcessingThreshold {
 		return s.processStubsParallel(query, stubs)
 	}
 
@@ -979,6 +983,8 @@ func (s *searcher) processStubsSequential(query QueryV2, stubs []*Stub) (*Result
 }
 
 // processStubsParallel processes stubs in parallel using goroutines.
+//
+//nolint:gocognit,cyclop,funlen
 func (s *searcher) processStubsParallel(query QueryV2, stubs []*Stub) (*Result, error) {
 	const chunkSize = 50 // Process stubs in chunks of 50
 
@@ -990,7 +996,7 @@ func (s *searcher) processStubsParallel(query QueryV2, stubs []*Stub) (*Result, 
 	errorChan := make(chan error, numChunks)
 
 	// Launch goroutines for each chunk
-	for i := 0; i < numChunks; i++ {
+	for i := range numChunks {
 		start := i * chunkSize
 
 		end := start + chunkSize
@@ -1038,7 +1044,7 @@ func (s *searcher) processStubsParallel(query QueryV2, stubs []*Stub) (*Result, 
 		mostSimilars []*Stub
 	)
 
-	for i := 0; i < numChunks; i++ {
+	for range numChunks {
 		err := <-errorChan
 		if err != nil {
 			return nil, err
@@ -1144,6 +1150,8 @@ func (s *searcher) fastRankV2(query QueryV2, stub *Stub) float64 {
 }
 
 // fastMatchInput is an ultra-optimized version of matchInput.
+//
+//nolint:cyclop
 func (s *searcher) fastMatchInput(queryData map[string]any, stubInput InputData) bool {
 	// Fast path: empty query
 	if len(queryData) == 0 {
@@ -1347,7 +1355,7 @@ func (s *searcher) calcSpecificityStream(stubStream []InputData, queryStream []m
 		minLen = len(queryStream)
 	}
 
-	for i := 0; i < minLen; i++ {
+	for i := range minLen {
 		totalSpecificity += s.calcSpecificityUnary(stubStream[i], queryStream[i])
 	}
 

@@ -9,13 +9,21 @@ import (
 	"github.com/gripmock/deeply"
 )
 
+const (
+	// regexCacheSize is the maximum number of regex patterns to cache.
+	regexCacheSize = 1000
+)
+
 // Global LRU cache for regex patterns with size limit.
+//
+//nolint:gochecknoglobals
 var regexCache *lru.Cache[string, *regexp.Regexp]
 
+//nolint:gochecknoinits
 func init() {
 	var err error
-	// Create LRU cache with size limit of 1000 regex patterns
-	regexCache, err = lru.New[string, *regexp.Regexp](1000)
+	// Create LRU cache with size limit of regexCacheSize regex patterns
+	regexCache, err = lru.New[string, *regexp.Regexp](regexCacheSize)
 	if err != nil {
 		panic("failed to create regex cache: " + err.Error())
 	}
@@ -39,7 +47,7 @@ func getRegex(pattern string) (*regexp.Regexp, error) {
 
 // getRegexCacheStats returns regex cache statistics.
 func getRegexCacheStats() (int, int) {
-	return regexCache.Len(), 1000 // Fixed capacity
+	return regexCache.Len(), regexCacheSize // Fixed capacity
 }
 
 // clearRegexCache clears the regex cache.
@@ -107,7 +115,7 @@ func rankInput(queryData map[string]any, stubInput InputData) float64 {
 
 // equals compares two values for deep equality.
 //
-//nolint:gocognit,cyclop,gocyclo,funlen
+//nolint:gocognit,cyclop
 func equals(expected map[string]any, actual any, orderIgnore bool) bool {
 	if len(expected) == 0 {
 		return true
@@ -119,6 +127,7 @@ func equals(expected map[string]any, actual any, orderIgnore bool) bool {
 	}
 
 	// Fast path: single field
+	//nolint:nestif
 	if len(expected) == 1 {
 		for key, expectedValue := range expected {
 			actualValue, exists := actualMap[key]
@@ -126,6 +135,7 @@ func equals(expected map[string]any, actual any, orderIgnore bool) bool {
 				return false
 			}
 
+			//nolint:nestif
 			if orderIgnore {
 				if eSlice, eOk := expectedValue.([]any); eOk {
 					if aSlice, aOk := actualValue.([]any); aOk {
@@ -145,6 +155,7 @@ func equals(expected map[string]any, actual any, orderIgnore bool) bool {
 			return false
 		}
 
+		//nolint:nestif
 		if orderIgnore {
 			if eSlice, eOk := expectedValue.([]any); eOk {
 				if aSlice, aOk := actualValue.([]any); aOk {
@@ -166,20 +177,33 @@ func equals(expected map[string]any, actual any, orderIgnore bool) bool {
 }
 
 // ultraFastSpecializedEquals provides ultra-fast comparison for common types without reflect.
+//
+//nolint:cyclop,funlen
 func ultraFastSpecializedEquals(expected, actual any) bool {
 	// Ultra-fast path: same type comparison (most common case)
+	//nolint:nestif
 	if reflect.TypeOf(expected) == reflect.TypeOf(actual) {
 		switch e := expected.(type) {
 		case string:
-			return e == actual.(string)
+			if a, ok := actual.(string); ok {
+				return e == a
+			}
 		case int:
-			return e == actual.(int)
+			if a, ok := actual.(int); ok {
+				return e == a
+			}
 		case float64:
-			return e == actual.(float64)
+			if a, ok := actual.(float64); ok {
+				return e == a
+			}
 		case bool:
-			return e == actual.(bool)
+			if a, ok := actual.(bool); ok {
+				return e == a
+			}
 		case int64:
-			return e == actual.(int64)
+			if a, ok := actual.(int64); ok {
+				return e == a
+			}
 		}
 	}
 
