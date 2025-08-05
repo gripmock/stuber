@@ -552,6 +552,49 @@ func TestStuber_MatchesEqualsFound(t *testing.T) {
 	require.Nil(t, r.Similar())
 }
 
+func TestStuber_EqualsIgnoreArrayOrder(t *testing.T) {
+	s := stuber.NewBudgerigar(features.New(stuber.MethodTitle))
+
+	s.PutMany(
+		&stuber.Stub{
+			ID:      uuid.New(),
+			Service: "IdentifierService",
+			Method:  "ProcessUUIDs",
+			Input: stuber.InputData{
+				IgnoreArrayOrder: true,
+				Equals: map[string]any{
+					"string_uuids": []any{
+						"f1e9ed24-93ba-4e4f-ab9f-3942196d5c03",
+						"e3484119-24e1-42d9-b4c2-7d6004ee86d9",
+						"cc991218-a920-40c8-9f42-3b329c8723f2",
+						"c30f45d2-f8a4-4a94-a994-4cc349bca457",
+					},
+				},
+			},
+			Output: stuber.Output{Data: map[string]any{"process_id": 1, "status_code": 200}},
+		},
+	)
+
+	// Порядок элементов в запросе другой
+	query := stuber.Query{
+		Service: "IdentifierService",
+		Method:  "ProcessUUIDs",
+		Data: map[string]any{
+			"string_uuids": []any{
+				"cc991218-a920-40c8-9f42-3b329c8723f2",
+				"f1e9ed24-93ba-4e4f-ab9f-3942196d5c03",
+				"c30f45d2-f8a4-4a94-a994-4cc349bca457",
+				"e3484119-24e1-42d9-b4c2-7d6004ee86d9",
+			},
+		},
+	}
+
+	r, err := s.FindByQuery(query)
+	require.NoError(t, err)
+	require.NotNil(t, r.Found())
+	require.Nil(t, r.Similar())
+}
+
 func TestDelete(t *testing.T) {
 	id1, id2, id3 := uuid.New(), uuid.New(), uuid.New()
 

@@ -111,37 +111,48 @@ func equals(expected map[string]any, actual any, orderIgnore bool) bool {
 		return true
 	}
 
-	// Convert actual to map if it's not already
 	actualMap, ok := actual.(map[string]any)
 	if !ok {
 		return false
 	}
 
-	// Ultra-fast path: single field comparison (most common case)
 	if len(expected) == 1 {
 		for key, expectedValue := range expected {
 			actualValue, exists := actualMap[key]
 			if !exists {
 				return false
 			}
+			// Исправление: если orderIgnore и оба значения — слайсы, сравниваем через deeply
+			if orderIgnore {
+				eSlice, eOk := expectedValue.([]any)
+				aSlice, aOk := actualValue.([]any)
+				if eOk && aOk {
+					return deeply.EqualsIgnoreArrayOrder(eSlice, aSlice)
+				}
+			}
 			return ultraFastSpecializedEquals(expectedValue, actualValue)
 		}
 	}
 
-	// Check if all expected fields are present and equal
 	for key, expectedValue := range expected {
 		actualValue, exists := actualMap[key]
 		if !exists {
 			return false
 		}
-
+		if orderIgnore {
+			eSlice, eOk := expectedValue.([]any)
+			aSlice, aOk := actualValue.([]any)
+			if eOk && aOk {
+				if !deeply.EqualsIgnoreArrayOrder(eSlice, aSlice) {
+					return false
+				}
+				continue
+			}
+		}
 		if !ultraFastSpecializedEquals(expectedValue, actualValue) {
 			return false
 		}
 	}
-
-	// For streaming cases, we don't need to check extra fields
-	// as the client might send additional fields that we don't care about
 	return true
 }
 
