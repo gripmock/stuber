@@ -12,6 +12,8 @@ import (
 //
 //nolint:funlen
 func TestMatchStreamV2(t *testing.T) {
+	// Clear all caches before test
+	stuber.ClearAllCaches()
 	tests := []struct {
 		name       string
 		queryInput []map[string]any
@@ -96,6 +98,8 @@ func TestMatchStreamV2(t *testing.T) {
 
 // TestMatchWithStreamV2 - tests combined matching in V2.
 func TestMatchWithStreamV2(t *testing.T) {
+	// Clear all caches before test
+	stuber.ClearAllCaches()
 	query := stuber.QueryV2{
 		Service: "test",
 		Method:  "test",
@@ -146,6 +150,8 @@ func TestMatchWithStreamV2(t *testing.T) {
 
 // TestBackwardCompatibilityV2 - tests backward compatibility in V2.
 func TestBackwardCompatibilityV2(t *testing.T) {
+	// Clear all caches before test
+	stuber.ClearAllCaches()
 	query := stuber.QueryV2{
 		Service: "test",
 		Method:  "test",
@@ -174,6 +180,8 @@ func TestBackwardCompatibilityV2(t *testing.T) {
 }
 
 func TestV2UnaryRequest(t *testing.T) {
+	// Clear all caches before test
+	stuber.ClearAllCaches()
 	query := stuber.QueryV2{
 		Service: "test",
 		Method:  "test",
@@ -202,6 +210,8 @@ func TestV2UnaryRequest(t *testing.T) {
 }
 
 func TestV2StreamRequest(t *testing.T) {
+	// Clear all caches before test
+	stuber.ClearAllCaches()
 	query := stuber.QueryV2{
 		Service: "test",
 		Method:  "test",
@@ -260,6 +270,8 @@ func TestV2MultipleStreamsNoStubStream(t *testing.T) {
 
 // TestV2Priority - tests priorities in V2.
 func TestV2Priority(t *testing.T) {
+	// Clear all caches before test
+	stuber.ClearAllCaches()
 	stub1 := &stuber.Stub{
 		Service:  "test",
 		Method:   "test",

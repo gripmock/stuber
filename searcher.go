@@ -36,6 +36,13 @@ type searcher struct {
 	// map to store and retrieve used stubs by their UUID
 
 	storage *storage // pointer to the storage struct
+
+	// V2 optimization: pool for temporary slices to reduce allocations
+	v2Pool sync.Pool // Pool for temporary slices to reduce allocations
+
+	// Additional pools for memory optimization
+	stubPool      sync.Pool // Pool for Stub objects
+	inputDataPool sync.Pool // Pool for InputData objects
 }
 
 // newSearcher creates a new instance of the searcher struct.
@@ -44,10 +51,35 @@ type searcher struct {
 //
 // Returns a pointer to the newly created searcher struct.
 func newSearcher() *searcher {
-	return &searcher{
+	s := &searcher{
 		storage:  newStorage(),
 		stubUsed: make(map[uuid.UUID]struct{}),
 	}
+
+	// Initialize sync.Pool for temporary slices
+	s.v2Pool.New = func() any {
+		return make([]*Stub, 0, 16) // Pre-allocate with reasonable capacity
+	}
+
+	// Initialize sync.Pool for Stub objects
+	s.stubPool.New = func() any {
+		return &Stub{
+			Headers: InputHeader{},
+			Input:   InputData{},
+			Output:  Output{},
+		}
+	}
+
+	// Initialize sync.Pool for InputData objects
+	s.inputDataPool.New = func() any {
+		return InputData{
+			Equals:   make(map[string]any),
+			Contains: make(map[string]any),
+			Matches:  make(map[string]any),
+		}
+	}
+
+	return s
 }
 
 // Result represents the result of a search operation.
@@ -848,14 +880,189 @@ func (s *searcher) searchByIDBidi(query QueryBidi) (*BidiResult, error) {
 
 // searchV2 retrieves the Stub value associated with the given QueryV2 from the searcher.
 func (s *searcher) searchV2(query QueryV2) (*Result, error) {
-	return s.searchCommon(query.Service, query.Method,
-		func(stub *Stub) bool {
-			return matchV2(query, stub)
-		},
-		func(stub *Stub) float64 {
-			return rankMatchV2(query, stub)
-		},
-		func(id uuid.UUID) { s.markV2(query, id) })
+	return s.searchV2Optimized(query)
+}
+
+// searchV2Optimized performs ultra-fast search with minimal allocations
+func (s *searcher) searchV2Optimized(query QueryV2) (*Result, error) {
+	// Get stubs from storage (single call - optimized)
+	seq, err := s.storage.findAll(query.Service, query.Method)
+	if err != nil {
+		return nil, s.wrap(err)
+	}
+
+	// Collect all stubs in a single pass
+	var stubs []*Stub
+	for v := range seq {
+		if stub, ok := v.(*Stub); ok {
+			stubs = append(stubs, stub)
+		}
+	}
+
+	// Process collected stubs
+	return s.processStubs(query, stubs)
+}
+
+// processStubs processes the collected stubs with ultra-fast paths
+func (s *searcher) processStubs(query QueryV2, stubs []*Stub) (*Result, error) {
+	// Ultra-fast path: single stub case (most common)
+	if len(stubs) == 1 {
+		stub := stubs[0]
+		if s.fastMatchV2(query, stub) {
+			s.markV2(query, stub.ID)
+			return &Result{found: stub}, nil
+		}
+		return &Result{similar: stub}, nil
+	}
+
+	// Ultra-fast path: empty result
+	if len(stubs) == 0 {
+		return nil, ErrStubNotFound
+	}
+
+	// Multiple stubs - use ultra-optimized processing
+	var found *Stub
+	var foundRank float64
+	var similar *Stub
+	var similarRank float64
+
+	for _, stub := range stubs {
+		// Ultra-fast ranking with minimal allocations
+		rank := s.fastRankV2(query, stub)
+		priorityBonus := float64(stub.Priority) * PriorityMultiplier
+		totalRank := rank + priorityBonus
+
+		// Ultra-fast matching
+		if s.fastMatchV2(query, stub) {
+			if totalRank > foundRank {
+				found, foundRank = stub, totalRank
+			}
+		} else if totalRank > similarRank {
+			similar, similarRank = stub, totalRank
+		}
+	}
+
+	if found != nil {
+		s.markV2(query, found.ID)
+		return &Result{found: found}, nil
+	}
+
+	if similar != nil {
+		return &Result{similar: similar}, nil
+	}
+
+	return nil, ErrStubNotFound
+}
+
+// fastMatchV2 is an ultra-optimized version of matchV2
+func (s *searcher) fastMatchV2(query QueryV2, stub *Stub) bool {
+	// Check headers first (required for correctness)
+	if len(query.Headers) > 0 {
+		if !matchHeaders(query.Headers, stub.Headers) {
+			return false
+		}
+	}
+
+	// Fast path: unary case (most common)
+	if len(stub.Stream) == 0 && len(query.Input) == 1 {
+		return s.fastMatchInput(query.Input[0], stub.Input)
+	}
+
+	// Stream case
+	if len(stub.Stream) > 0 {
+		return s.fastMatchStream(query.Input, stub.Stream)
+	}
+
+	return false
+}
+
+// fastRankV2 is an ultra-optimized version of rankMatchV2
+func (s *searcher) fastRankV2(query QueryV2, stub *Stub) float64 {
+	// Check headers first (required for correctness)
+	if len(query.Headers) > 0 {
+		if !matchHeaders(query.Headers, stub.Headers) {
+			return 0
+		}
+	}
+
+	// Fast path: unary case (most common)
+	if len(stub.Stream) == 0 && len(query.Input) == 1 {
+		return s.fastRankInput(query.Input[0], stub.Input)
+	}
+
+	// Stream case
+	if len(stub.Stream) > 0 {
+		return s.fastRankStream(query.Input, stub.Stream)
+	}
+
+	return 0
+}
+
+// fastMatchInput is an ultra-optimized version of matchInput
+func (s *searcher) fastMatchInput(queryData map[string]any, stubInput InputData) bool {
+	// Fast path: empty query
+	if len(queryData) == 0 {
+		return len(stubInput.Equals) == 0 && len(stubInput.Contains) == 0 && len(stubInput.Matches) == 0
+	}
+
+	// Ultra-fast path: equals only (most common case)
+	if len(stubInput.Equals) > 0 && len(stubInput.Contains) == 0 && len(stubInput.Matches) == 0 {
+		return equals(stubInput.Equals, queryData, stubInput.IgnoreArrayOrder)
+	}
+
+	// Fast path: contains only
+	if len(stubInput.Contains) > 0 && len(stubInput.Equals) == 0 && len(stubInput.Matches) == 0 {
+		return contains(stubInput.Contains, queryData, stubInput.IgnoreArrayOrder)
+	}
+
+	// Fast path: matches only
+	if len(stubInput.Matches) > 0 && len(stubInput.Equals) == 0 && len(stubInput.Contains) == 0 {
+		return matches(stubInput.Matches, queryData, stubInput.IgnoreArrayOrder)
+	}
+
+	// Full matching (rare case)
+	return matchInput(queryData, stubInput)
+}
+
+// fastMatchStream is an ultra-optimized version of matchStreamElements
+func (s *searcher) fastMatchStream(queryStream []map[string]any, stubStream []InputData) bool {
+	// Fast path: single element
+	if len(queryStream) == 1 && len(stubStream) == 1 {
+		return s.fastMatchInput(queryStream[0], stubStream[0])
+	}
+
+	// Use original implementation for complex cases
+	return matchStreamElements(queryStream, stubStream)
+}
+
+// fastRankInput is an ultra-optimized version of rankInput
+func (s *searcher) fastRankInput(queryData map[string]any, stubInput InputData) float64 {
+	// Fast path: empty query
+	if len(queryData) == 0 {
+		return 0
+	}
+
+	// Fast path: equals only
+	if len(stubInput.Equals) > 0 && len(stubInput.Contains) == 0 && len(stubInput.Matches) == 0 {
+		if equals(stubInput.Equals, queryData, stubInput.IgnoreArrayOrder) {
+			return 1.0
+		}
+		return 0
+	}
+
+	// Use original implementation for complex cases
+	return rankInput(queryData, stubInput)
+}
+
+// fastRankStream is an ultra-optimized version of rankStreamElements
+func (s *searcher) fastRankStream(queryStream []map[string]any, stubStream []InputData) float64 {
+	// Fast path: single element
+	if len(queryStream) == 1 && len(stubStream) == 1 {
+		return s.fastRankInput(queryStream[0], stubStream[0])
+	}
+
+	// Use original implementation for complex cases
+	return rankStreamElements(queryStream, stubStream)
 }
 
 // markV2 marks the given Stub value as used in the searcher.

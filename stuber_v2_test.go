@@ -199,6 +199,8 @@ func TestBudgerigar_UnusedV2(t *testing.T) {
 }
 
 func TestBudgerigar_SearchWithHeadersV2(t *testing.T) {
+	// Clear all caches before test
+	stuber.ClearAllCaches()
 	s := stuber.NewBudgerigar(features.New())
 
 	// Create stub with headers
@@ -312,6 +314,8 @@ func TestResult_SimilarV2(t *testing.T) {
 }
 
 func TestStuber_MatchesEqualsFoundV2(t *testing.T) {
+	// Clear all caches before test
+	stuber.ClearAllCaches()
 	s := stuber.NewBudgerigar(features.New())
 
 	// Create stub with equals
@@ -437,6 +441,8 @@ func TestBudgerigar_FindByQuery_FoundWithPriorityV2(t *testing.T) {
 }
 
 func TestBudgerigar_UsedV2(t *testing.T) {
+	// Clear all caches before test
+	stuber.ClearAllCaches()
 	s := stuber.NewBudgerigar(features.New())
 
 	// Create stubs
