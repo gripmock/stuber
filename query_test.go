@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/bavix/features"
@@ -13,13 +14,11 @@ import (
 )
 
 func TestQuery_RequestInternal(t *testing.T) {
-	// Test without internal flag
 	q := Query{
 		toggles: features.New(),
 	}
 	require.False(t, q.RequestInternal())
 
-	// Test with internal flag
 	q = Query{
 		toggles: features.New(RequestInternalFlag),
 	}
@@ -27,12 +26,10 @@ func TestQuery_RequestInternal(t *testing.T) {
 }
 
 func TestToggles(t *testing.T) {
-	// Test without header
 	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/", nil)
 	togglesResult := toggles(req)
 	require.False(t, togglesResult.Has(RequestInternalFlag))
 
-	// Test with header
 	req, _ = http.NewRequestWithContext(context.Background(), http.MethodPost, "/", nil)
 	req.Header.Set("X-Gripmock-Requestinternal", "true")
 	togglesResult = toggles(req)
@@ -85,4 +82,33 @@ func TestNewQuery_InvalidJSON(t *testing.T) {
 
 	_, err := NewQuery(req)
 	require.Error(t, err)
+}
+
+func TestNewQueryBidi(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString(`{"service":"svc","method":"mthd","headers":{"h":"v"}}`))
+	req.Header.Set("Content-Type", "application/json")
+	q, err := NewQueryBidi(req)
+	require.NoError(t, err)
+	require.Equal(t, "svc", q.Service)
+	require.Equal(t, "mthd", q.Method)
+	require.Equal(t, "v", q.Headers["h"])
+}
+
+func TestRequestInternalBidi(t *testing.T) {
+	q := QueryBidi{
+		Service: "svc",
+		Method:  "mthd",
+		Headers: map[string]any{"h": "v"},
+	}
+	require.False(t, q.RequestInternal())
+}
+
+func TestRequestInternalV2(t *testing.T) {
+	q := QueryV2{
+		Service: "svc",
+		Method:  "mthd",
+		Headers: map[string]any{"h": "v"},
+		Input:   []map[string]any{{"key": "value"}},
+	}
+	require.False(t, q.RequestInternal())
 }

@@ -240,3 +240,292 @@ func BenchmarkUnused(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkFindByQueryStream measures the performance of finding stubs with stream data.
+func BenchmarkFindByQueryStream(b *testing.B) {
+	budgerigar := stuber.NewBudgerigar(features.New())
+
+	stubs := make([]*stuber.Stub, 100)
+	for i := range 100 {
+		stubs[i] = &stuber.Stub{
+			ID:      uuid.New(),
+			Service: "service-" + uuid.NewString(),
+			Method:  "method-" + uuid.NewString(),
+			Stream: []stuber.InputData{
+				{Equals: map[string]any{"stream1": "value1"}},
+				{Equals: map[string]any{"stream2": "value2"}},
+			},
+		}
+	}
+
+	budgerigar.PutMany(stubs...)
+
+	query := stuber.Query{
+		Service: "service-" + uuid.NewString(),
+		Method:  "method-" + uuid.NewString(),
+		Data:    map[string]any{"stream1": "value1"},
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for range b.N {
+		_, _ = budgerigar.FindByQuery(query)
+	}
+}
+
+// BenchmarkFindByQueryStreamBackwardCompatibility measures the performance of backward compatibility.
+func BenchmarkFindByQueryStreamBackwardCompatibility(b *testing.B) {
+	budgerigar := stuber.NewBudgerigar(features.New())
+
+	stubs := make([]*stuber.Stub, 100)
+	for i := range 100 {
+		stubs[i] = &stuber.Stub{
+			ID:      uuid.New(),
+			Service: "service-" + uuid.NewString(),
+			Method:  "method-" + uuid.NewString(),
+			Input: stuber.InputData{
+				Equals: map[string]any{"key1": "value1"},
+			},
+		}
+	}
+
+	budgerigar.PutMany(stubs...)
+
+	query := stuber.Query{
+		Service: "service-" + uuid.NewString(),
+		Method:  "method-" + uuid.NewString(),
+		Data:    map[string]any{"key1": "value1"},
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for range b.N {
+		_, _ = budgerigar.FindByQuery(query)
+	}
+}
+
+// BenchmarkMatchStream measures the performance of stream matching through public API.
+func BenchmarkMatchStream(b *testing.B) {
+	budgerigar := stuber.NewBudgerigar(features.New())
+
+	stub := &stuber.Stub{
+		Service: "test",
+		Method:  "test",
+		Stream: []stuber.InputData{
+			{Equals: map[string]any{"key1": "value1"}},
+			{Equals: map[string]any{"key2": "value2"}},
+		},
+	}
+
+	budgerigar.PutMany(stub)
+
+	query := stuber.Query{
+		Service: "test",
+		Method:  "test",
+		Data:    map[string]any{"key1": "value1"},
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for range b.N {
+		_, _ = budgerigar.FindByQuery(query)
+	}
+}
+
+// BenchmarkRankMatchStream measures the performance of stream ranking through public API.
+func BenchmarkRankMatchStream(b *testing.B) {
+	budgerigar := stuber.NewBudgerigar(features.New())
+
+	stubs := make([]*stuber.Stub, 10)
+	for i := range 10 {
+		stubs[i] = &stuber.Stub{
+			ID:      uuid.New(),
+			Service: "test",
+			Method:  "test",
+			Stream: []stuber.InputData{
+				{Equals: map[string]any{"key1": "value1"}},
+				{Equals: map[string]any{"key2": "value2"}},
+			},
+		}
+	}
+
+	budgerigar.PutMany(stubs...)
+
+	query := stuber.Query{
+		Service: "test",
+		Method:  "test",
+		Data:    map[string]any{"key1": "value1"},
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for range b.N {
+		_, _ = budgerigar.FindByQuery(query)
+	}
+}
+
+// BenchmarkQueryV2Unary measures the performance of V2 unary requests.
+func BenchmarkQueryV2Unary(b *testing.B) {
+	budgerigar := stuber.NewBudgerigar(features.New())
+
+	stub := &stuber.Stub{
+		Service: "test",
+		Method:  "test",
+		Input: stuber.InputData{
+			Equals: map[string]any{"key1": "value1"},
+		},
+	}
+
+	budgerigar.PutMany(stub)
+
+	query := stuber.QueryV2{
+		Service: "test",
+		Method:  "test",
+		Input:   []map[string]any{{"key1": "value1"}},
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for range b.N {
+		_, _ = budgerigar.FindByQueryV2(query)
+	}
+}
+
+// BenchmarkQueryV2Stream measures the performance of V2 stream requests.
+func BenchmarkQueryV2Stream(b *testing.B) {
+	budgerigar := stuber.NewBudgerigar(features.New())
+
+	stub := &stuber.Stub{
+		Service: "test",
+		Method:  "test",
+		Stream: []stuber.InputData{
+			{Equals: map[string]any{"stream1": "value1"}},
+			{Equals: map[string]any{"stream2": "value2"}},
+		},
+	}
+
+	budgerigar.PutMany(stub)
+
+	query := stuber.QueryV2{
+		Service: "test",
+		Method:  "test",
+		Input:   []map[string]any{{"stream1": "value1"}, {"stream2": "value2"}},
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for range b.N {
+		_, _ = budgerigar.FindByQueryV2(query)
+	}
+}
+
+// BenchmarkQueryV2Comparison compares V1 vs V2 performance.
+func BenchmarkQueryV2Comparison(b *testing.B) {
+	budgerigar := stuber.NewBudgerigar(features.New())
+
+	stub := &stuber.Stub{
+		Service: "test",
+		Method:  "test",
+		Input: stuber.InputData{
+			Equals: map[string]any{"key1": "value1"},
+		},
+	}
+
+	budgerigar.PutMany(stub)
+
+	queryUnary := stuber.QueryV2{
+		Service: "test",
+		Method:  "test",
+		Input:   []map[string]any{{"key1": "value1"}},
+	}
+
+	queryStream := stuber.QueryV2{
+		Service: "test",
+		Method:  "test",
+		Input:   []map[string]any{{"stream1": "value1"}, {"stream2": "value2"}},
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for range b.N {
+		_, _ = budgerigar.FindByQueryV2(queryUnary)
+		_, _ = budgerigar.FindByQueryV2(queryStream)
+	}
+}
+
+// BenchmarkBidiStreaming benchmarks bidirectional streaming performance.
+//
+//nolint:funlen
+func BenchmarkBidiStreaming(b *testing.B) {
+	s := stuber.NewBudgerigar(features.New())
+
+	// Create multiple stubs with different patterns
+	stub1 := &stuber.Stub{
+		ID:       uuid.New(),
+		Service:  "ChatService",
+		Method:   "Chat",
+		Priority: 1,
+		Stream: []stuber.InputData{
+			{Equals: map[string]any{"message": "hello"}},
+			{Equals: map[string]any{"message": "world"}},
+			{Equals: map[string]any{"message": "goodbye"}},
+		},
+		Output: stuber.Output{
+			Data: map[string]any{"response": "Pattern 1 completed"},
+		},
+	}
+
+	stub2 := &stuber.Stub{
+		ID:       uuid.New(),
+		Service:  "ChatService",
+		Method:   "Chat",
+		Priority: 2,
+		Stream: []stuber.InputData{
+			{Equals: map[string]any{"message": "hello"}},
+			{Equals: map[string]any{"message": "universe"}},
+			{Equals: map[string]any{"message": "farewell"}},
+		},
+		Output: stuber.Output{
+			Data: map[string]any{"response": "Pattern 2 completed"},
+		},
+	}
+
+	s.PutMany(stub1, stub2)
+
+	query := stuber.QueryBidi{
+		Service: "ChatService",
+		Method:  "Chat",
+		Headers: map[string]any{"content-type": "application/json"},
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for range b.N {
+		result, err := s.FindByQueryBidi(query)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		// Simulate a conversation
+		messages := []map[string]any{
+			{"message": "hello"},
+			{"message": "world"},
+			{"message": "goodbye"},
+		}
+
+		for _, msg := range messages {
+			_, err := result.Next(msg)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	}
+}

@@ -1,14 +1,26 @@
 package stuber
 
 import (
+	"container/heap"
 	"errors"
 	"iter"
-	"slices"
 	"strings"
 	"sync"
 
 	"github.com/google/uuid"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/zeebo/xxh3"
+)
+
+const (
+	// smallCollectionThreshold is the threshold for using simple sorting instead of heap.
+	smallCollectionThreshold = 10
+	// smallItemsThreshold is the threshold for using simple sorting instead of heap.
+	smallItemsThreshold = 3
+	// twoItemsThreshold is the threshold for two items case.
+	twoItemsThreshold = 2
+	// stringCacheSize is the maximum number of string hashes to cache.
+	stringCacheSize = 10000
 )
 
 // ErrLeftNotFound is returned when the left value is not found.
@@ -91,37 +103,213 @@ func (s *storage) findAll(left, right string) (iter.Seq[Value], error) {
 // yieldSortedValues yields values sorted by score in descending order,
 // minimizing memory allocations and maximizing iterator usage.
 func (s *storage) yieldSortedValues(indexes []uint64, yield func(Value) bool) {
+	s.yieldSortedValuesOptimized(indexes, yield)
+}
+
+// yieldSortedValuesOptimized is an ultra-optimized version with minimal allocations.
+//
+//nolint:gocognit,cyclop,funlen,nestif
+func (s *storage) yieldSortedValuesOptimized(indexes []uint64, yield func(Value) bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	// Collect all values and sort them by score in descending order.
-	// This approach is memory efficient for large datasets.
-	type sortItem struct {
-		value Value
-		score int
+	// Ultra-fast path: single index with single value (most common case)
+	if len(indexes) == 1 {
+		if m, exists := s.items[indexes[0]]; exists && len(m) == 1 {
+			for _, v := range m {
+				if !yield(v) {
+					return
+				}
+			}
+
+			return
+		}
 	}
 
-	// Collect values with scores for sorting
-	var items []sortItem
+	// Ultra-fast path: empty result
+	if len(indexes) == 0 {
+		return
+	}
 
-	// First pass: collect all values with scores
+	// Pre-count total items for optimal allocation
+	totalItems := s.countItemsFast(indexes)
+
+	// Ultra-fast path: single item
+	if totalItems == 1 {
+		for _, index := range indexes {
+			if m, exists := s.items[index]; exists {
+				for _, v := range m {
+					if !yield(v) {
+						return
+					}
+				}
+
+				return
+			}
+		}
+
+		return
+	}
+
+	// Fast path: small dataset (≤smallItemsThreshold items) - use ultra-simple iteration
+	if totalItems <= smallItemsThreshold {
+		items := make([]Value, 0, totalItems)
+
+		// Collect items
+		for _, index := range indexes {
+			if m, exists := s.items[index]; exists {
+				for _, v := range m {
+					items = append(items, v)
+				}
+			}
+		}
+
+		// Ultra-simple sort for 2-3 items
+		if len(items) == twoItemsThreshold {
+			if items[0].Score() < items[1].Score() {
+				items[0], items[1] = items[1], items[0]
+			}
+		} else if len(items) == smallItemsThreshold {
+			// Manual sort for smallItemsThreshold items (faster than bubble sort)
+			if items[0].Score() < items[1].Score() {
+				items[0], items[1] = items[1], items[0]
+			}
+
+			if items[1].Score() < items[2].Score() {
+				items[1], items[2] = items[2], items[1]
+			}
+
+			if items[0].Score() < items[1].Score() {
+				items[0], items[1] = items[1], items[0]
+			}
+		}
+
+		for _, v := range items {
+			if !yield(v) {
+				return
+			}
+		}
+
+		return
+	}
+
+	// Large dataset - use heap-based sorting for O(N log N) performance
+	s.yieldSortedValuesHeap(indexes, yield)
+}
+
+// sortItem represents a value with its score for sorting.
+type sortItem struct {
+	value Value
+	score int
+}
+
+// countItemsFast provides ultra-fast counting of items without collecting them.
+func (s *storage) countItemsFast(indexes []uint64) int {
+	total := 0
+
 	for _, index := range indexes {
 		if m, exists := s.items[index]; exists {
+			total += len(m)
+		}
+	}
+
+	return total
+}
+
+// scoreHeap implements heap.Interface for sorting by score.
+type scoreHeap []sortItem
+
+func (h *scoreHeap) Len() int           { return len(*h) }
+func (h *scoreHeap) Less(i, j int) bool { return (*h)[i].score > (*h)[j].score }
+func (h *scoreHeap) Swap(i, j int)      { (*h)[i], (*h)[j] = (*h)[j], (*h)[i] }
+func (h *scoreHeap) Push(x any) {
+	if item, ok := x.(sortItem); ok {
+		*h = append(*h, item)
+	}
+}
+
+func (h *scoreHeap) Pop() any {
+	old := *h
+	n := len(old)
+	x := old[n-1]
+	*h = old[0 : n-1]
+
+	return x
+}
+
+// yieldSortedValuesHeap uses heap-based sorting for O(N log N) performance.
+//
+//nolint:gocognit,cyclop,funlen
+func (s *storage) yieldSortedValuesHeap(indexes []uint64, yield func(Value) bool) {
+	// Ultra-fast path: single index with single value (most common case)
+	if len(indexes) == 1 {
+		if m, exists := s.items[indexes[0]]; exists && len(m) == 1 {
 			for _, v := range m {
-				items = append(items, sortItem{value: v, score: v.Score()})
+				if !yield(v) {
+					return
+				}
+			}
+
+			return
+		}
+	}
+
+	// Fast path: single index with multiple values
+	//nolint:nestif
+	if len(indexes) == 1 {
+		if m, exists := s.items[indexes[0]]; exists {
+			// Use slice-based sorting for small collections (faster than heap)
+			if len(m) <= smallCollectionThreshold {
+				items := make([]sortItem, 0, len(m))
+				for _, v := range m {
+					items = append(items, sortItem{value: v, score: v.Score()})
+				}
+				// Sort in descending order
+				for i := range len(items) - 1 {
+					for j := i + 1; j < len(items); j++ {
+						if items[i].score < items[j].score {
+							items[i], items[j] = items[j], items[i]
+						}
+					}
+				}
+
+				for _, item := range items {
+					if !yield(item.value) {
+						return
+					}
+				}
+
+				return
 			}
 		}
 	}
 
-	// Sort by score in descending order
-	if len(items) > 1 {
-		slices.SortFunc(items, func(a, b sortItem) int {
-			return b.score - a.score
-		})
+	// Use heap for complex cases
+	h := &scoreHeap{}
+	heap.Init(h)
+
+	// Pre-allocate heap capacity for better performance
+	totalItems := s.countItemsFast(indexes)
+	if totalItems > 0 {
+		*h = make(scoreHeap, 0, totalItems)
 	}
 
-	// Yield sorted values
-	for _, item := range items {
+	// Collect elements in heap
+	for _, index := range indexes {
+		if m, exists := s.items[index]; exists {
+			for _, v := range m {
+				heap.Push(h, sortItem{value: v, score: v.Score()})
+			}
+		}
+	}
+
+	// Extract elements in descending score order
+	for h.Len() > 0 {
+		item, ok := heap.Pop(h).(sortItem)
+		if !ok {
+			continue
+		}
+
 		if !yield(item.value) {
 			return
 		}
@@ -276,8 +464,48 @@ func (s *storage) del(keys ...uuid.UUID) int {
 	return deleted
 }
 
+// Global LRU cache for string hashes with size limit.
+//
+//nolint:gochecknoglobals
+var globalStringCache *lru.Cache[string, uint32]
+
+//nolint:gochecknoinits
+func init() {
+	var err error
+	// Create LRU cache with size limit of stringCacheSize entries
+	globalStringCache, err = lru.New[string, uint32](stringCacheSize)
+	if err != nil {
+		panic("failed to create string hash cache: " + err.Error())
+	}
+}
+
 func (s *storage) id(value string) uint32 {
-	return uint32(xxh3.HashString(value)) //nolint:gosec
+	// Try to get from cache first
+	if hash, exists := globalStringCache.Get(value); exists {
+		return hash
+	}
+
+	// Calculate hash and store in cache
+	hash := uint32(xxh3.HashString(value)) //nolint:gosec
+	globalStringCache.Add(value, hash)
+
+	return hash
+}
+
+// clearStringHashCache clears the string hash cache.
+func clearStringHashCache() {
+	globalStringCache.Purge()
+}
+
+// getStringHashCacheStats returns cache statistics.
+func getStringHashCacheStats() (int, int) {
+	return globalStringCache.Len(), stringCacheSize // Fixed capacity
+}
+
+// ClearAllCaches clears all LRU caches (for testing purposes).
+func ClearAllCaches() {
+	clearStringHashCache()
+	clearRegexCache()
 }
 
 func (s *storage) pos(a, b uint32) uint64 {

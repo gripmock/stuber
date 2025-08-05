@@ -66,7 +66,6 @@ func TestFindBy(t *testing.T) {
 func TestFindBySorted(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New())
 
-	// Create stubs with different priorities
 	stub1 := &stuber.Stub{ID: uuid.New(), Service: "Greeter1", Method: "SayHello1", Priority: 10}
 	stub2 := &stuber.Stub{ID: uuid.New(), Service: "Greeter1", Method: "SayHello1", Priority: 30}
 	stub3 := &stuber.Stub{ID: uuid.New(), Service: "Greeter1", Method: "SayHello1", Priority: 20}
@@ -254,9 +253,14 @@ func TestBudgerigar_SearchWithPackageAndWithoutPackage(t *testing.T) {
 
 	require.Empty(t, s.Unused())
 
+	// Use fixed UUIDs to ensure stable sorting
+	id1 := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	id2 := uuid.MustParse("00000000-0000-0000-0000-000000000002")
+	id3 := uuid.MustParse("00000000-0000-0000-0000-000000000003")
+
 	stubs := []*stuber.Stub{
 		{
-			ID:      uuid.New(),
+			ID:      id1,
 			Service: "helloworld.v1.Gripmock",
 			Method:  "SayHello",
 			Input: stuber.InputData{Equals: map[string]any{
@@ -267,7 +271,7 @@ func TestBudgerigar_SearchWithPackageAndWithoutPackage(t *testing.T) {
 			}},
 		},
 		{
-			ID:      uuid.New(),
+			ID:      id2,
 			Service: "Gripmock",
 			Method:  "SayHello",
 			Input: stuber.InputData{Equals: map[string]any{
@@ -278,7 +282,7 @@ func TestBudgerigar_SearchWithPackageAndWithoutPackage(t *testing.T) {
 			}},
 		},
 		{
-			ID:      uuid.New(),
+			ID:      id3,
 			Service: "Gripmock",
 			Method:  "SayHello",
 			Input: stuber.InputData{Equals: map[string]any{
@@ -296,19 +300,19 @@ func TestBudgerigar_SearchWithPackageAndWithoutPackage(t *testing.T) {
 
 	cases := []struct {
 		payload string
-		id      uuid.UUID
+		message string
 	}{
 		{
 			payload: `{"data":{"name":"simple3"},"method":"SayHello","service":"helloworld.v1.Gripmock"}`,
-			id:      stubs[0].ID,
+			message: "Hello Simple3. Package helloworld.v1",
 		},
 		{
 			payload: `{"data":{"name":"simple3"},"method":"SayHello","service":"Gripmock"}`,
-			id:      stubs[2].ID,
+			message: "Hello Simple3",
 		},
 		{
 			payload: `{"data":{"name":"simple4"},"method":"SayHello","service":"helloworld.v1.Gripmock"}`,
-			id:      stubs[1].ID,
+			message: "Hello Simple4",
 		},
 	}
 
@@ -321,7 +325,7 @@ func TestBudgerigar_SearchWithPackageAndWithoutPackage(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, r)
 		require.NotNil(t, r.Found())
-		require.Equal(t, c.id, r.Found().ID)
+		require.Equal(t, c.message, r.Found().Output.Data["message"])
 		require.Nil(t, r.Similar())
 	}
 
@@ -331,8 +335,11 @@ func TestBudgerigar_SearchWithPackageAndWithoutPackage(t *testing.T) {
 		require.Len(t, items, expectedCount)
 	}
 
+	// Due to the storage logic that includes truncated service names,
+	// "helloworld.v1.Gripmock" will also find stubs for "Gripmock"
+	// So we expect 3 stubs total (1 for helloworld.v1.Gripmock + 2 for Gripmock)
 	checkItems("helloworld.v1.Gripmock", 3)
-	checkItems("Gripmock", 2)
+	checkItems("Gripmock", 2) // Only the stubs for Gripmock service
 }
 
 func TestBudgerigar_SearchEmpty(t *testing.T) {
@@ -545,6 +552,49 @@ func TestStuber_MatchesEqualsFound(t *testing.T) {
 	require.Nil(t, r.Similar())
 }
 
+func TestStuber_EqualsIgnoreArrayOrder(t *testing.T) {
+	s := stuber.NewBudgerigar(features.New(stuber.MethodTitle))
+
+	s.PutMany(
+		&stuber.Stub{
+			ID:      uuid.New(),
+			Service: "IdentifierService",
+			Method:  "ProcessUUIDs",
+			Input: stuber.InputData{
+				IgnoreArrayOrder: true,
+				Equals: map[string]any{
+					"string_uuids": []any{
+						"f1e9ed24-93ba-4e4f-ab9f-3942196d5c03",
+						"e3484119-24e1-42d9-b4c2-7d6004ee86d9",
+						"cc991218-a920-40c8-9f42-3b329c8723f2",
+						"c30f45d2-f8a4-4a94-a994-4cc349bca457",
+					},
+				},
+			},
+			Output: stuber.Output{Data: map[string]any{"process_id": 1, "status_code": 200}},
+		},
+	)
+
+	// The order of elements in the query is different
+	query := stuber.Query{
+		Service: "IdentifierService",
+		Method:  "ProcessUUIDs",
+		Data: map[string]any{
+			"string_uuids": []any{
+				"cc991218-a920-40c8-9f42-3b329c8723f2",
+				"f1e9ed24-93ba-4e4f-ab9f-3942196d5c03",
+				"c30f45d2-f8a4-4a94-a994-4cc349bca457",
+				"e3484119-24e1-42d9-b4c2-7d6004ee86d9",
+			},
+		},
+	}
+
+	r, err := s.FindByQuery(query)
+	require.NoError(t, err)
+	require.NotNil(t, r.Found())
+	require.Nil(t, r.Similar())
+}
+
 func TestDelete(t *testing.T) {
 	id1, id2, id3 := uuid.New(), uuid.New(), uuid.New()
 
@@ -747,7 +797,6 @@ func TestBudgerigar_FindByQuery_InternalRequest(t *testing.T) {
 	}
 	s.PutMany(stub)
 
-	// Test internal request (should not mark as used)
 	// We can't directly test internal requests through the public API
 	// but we can test that normal requests mark stubs as used
 	result, err := s.FindByQuery(stuber.Query{
@@ -759,4 +808,117 @@ func TestBudgerigar_FindByQuery_InternalRequest(t *testing.T) {
 
 	// Should be marked as used for normal requests
 	require.Len(t, s.Used(), 1)
+}
+
+//nolint:cyclop,funlen
+func TestBudgerigarWithData(t *testing.T) {
+	budgerigar := stuber.NewBudgerigar(features.New())
+
+	stub := &stuber.Stub{
+		Service: "test-service",
+		Method:  "test-method",
+		Input: stuber.InputData{
+			Equals: map[string]any{"name": "John", "age": 30},
+		},
+		Output: stuber.Output{
+			Data: map[string]any{"result": "success"},
+		},
+	}
+
+	// Add the stub
+	budgerigar.PutMany(stub)
+
+	query := stuber.Query{
+		Service: "test-service",
+		Method:  "test-method",
+		Data:    map[string]any{"name": "John", "age": 30},
+	}
+
+	result, err := budgerigar.FindByQuery(query)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	if result.Found() == nil {
+		t.Error("Expected to find exact match")
+	}
+
+	nonMatchingQuery := stuber.Query{
+		Service: "test-service",
+		Method:  "test-method",
+		Data:    map[string]any{"name": "John", "age": 25}, // Different age
+	}
+
+	result, err = budgerigar.FindByQuery(nonMatchingQuery)
+	if err != nil {
+		if err.Error() != "stub not found" {
+			t.Fatalf("Expected 'stub not found' error, got %v", err)
+		}
+
+		return
+	}
+
+	if result.Found() != nil {
+		t.Error("Expected no exact found result for non-matching data")
+	}
+
+	if result.Similar() == nil {
+		t.Error("Expected similar result for non-matching data")
+	}
+
+	partialQuery := stuber.Query{
+		Service: "test-service",
+		Method:  "test-method",
+		Data:    map[string]any{"name": "John"}, // Only name, missing age
+	}
+
+	result, err = budgerigar.FindByQuery(partialQuery)
+	if err != nil {
+		if err.Error() != "stub not found" {
+			t.Fatalf("Expected 'stub not found' error, got %v", err)
+		}
+
+		return
+	}
+
+	if result.Found() != nil {
+		t.Error("Expected no exact found result for partial data")
+	}
+
+	if result.Similar() == nil {
+		t.Error("Expected similar result for partial data")
+	}
+}
+
+func TestBudgerigarBackwardCompatibility(t *testing.T) {
+	budgerigar := stuber.NewBudgerigar(features.New())
+
+	stub := &stuber.Stub{
+		Service: "test-service",
+		Method:  "test-method",
+		Input: stuber.InputData{
+			Equals: map[string]any{"key1": "value1"},
+		},
+		Output: stuber.Output{
+			Data: map[string]any{"result": "success"},
+		},
+	}
+
+	// Add the stub
+	budgerigar.PutMany(stub)
+
+	query := stuber.Query{
+		Service: "test-service",
+		Method:  "test-method",
+		Data:    map[string]any{"key1": "value1"},
+	}
+
+	result, err := budgerigar.FindByQuery(query)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	if result.Found() == nil {
+		t.Error("Expected to find exact match for backward compatibility")
+	}
 }

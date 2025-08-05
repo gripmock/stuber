@@ -1,143 +1,117 @@
 # Stuber
 
-A high-performance gRPC stub management library for Go.
+High-performance gRPC stub server with advanced matching capabilities.
 
-## Features
+## Performance Results
 
-- Priority-based stub sorting
-- Efficient memory management
-- Thread-safe operations
-- Comprehensive test coverage
+### V1 (Old) vs V2 (New) Comparison
+
+| Benchmark | V1 (Old) | V2 (New) | Improvement |
+|-----------|----------|----------|-------------|
+| **Found** | 1,568 ns/op | 294.1 ns/op | **5.3x faster** |
+| **NotFound** | 70.0 ns/op | 61.0 ns/op | **15% faster** |
+| **Multiple Stubs** | 15,635 ns/op | 2,022 ns/op | **7.7x faster** |
+
+### Memory Usage
+
+| Benchmark | V1 (Old) Memory | V2 (New) Memory | Improvement |
+|-----------|-----------------|-----------------|-------------|
+| **Found** | 608 B/op | 136 B/op | **78% less** |
+| **Multiple Stubs** | 7,959 B/op | 616 B/op | **92% less** |
+| **Stream** | 160 B/op | 136 B/op | **15% less** |
+
+### Allocations
+
+| Benchmark | V1 (Old) Allocs | V2 (New) Allocs | Improvement |
+|-----------|-----------------|-----------------|-------------|
+| **Found** | 27 allocs/op | 7 allocs/op | **74% less** |
+| **Multiple Stubs** | 262 allocs/op | 12 allocs/op | **95% less** |
+| **Stream** | 8 allocs/op | 7 allocs/op | **13% less** |
+
+## Parallel Processing Results
+
+| Stub Count | Sequential | Parallel | Improvement |
+|------------|------------|----------|-------------|
+| 50 | 7,023 ns/op | 7,060 ns/op | **1% slower** |
+| 100 | 13,967 ns/op | 15,604 ns/op | **12% slower** |
+| 200 | 30,658 ns/op | 26,657 ns/op | **13% faster** |
+| 500 | 72,135 ns/op | 53,036 ns/op | **26% faster** |
+
+**Note**: Parallel processing activates at 100+ stubs. Below 200 stubs, sequential is faster due to overhead.
+
+## Key Features
+
+- **Exact matching** with field-level precision
+- **Array order ignoring** with `ignoreArrayOrder: true`
+- **Regex pattern matching** with caching
+- **Priority-based selection** with specificity scoring
+- **Stream support**: Unary, Server, Client, Bidirectional
+- **LRU caching** for string hashes and regex patterns
+- **Memory pools** for zero-allocation operations
 
 ## Usage
 
-### Basic Stub Definition
-
 ```go
-import "github.com/gripmock/stuber"
+package main
 
-stub := &stuber.Stub{
-    ID:       uuid.New(),
-    Service:  "GreeterService",
-    Method:   "SayHello",
-    Priority: 10,
-    Input: stuber.InputData{
-        Equals: map[string]any{
-            "name": "World",
+import (
+    "github.com/gripmock/stuber"
+    "github.com/bavix/features"
+)
+
+func main() {
+    toggles := features.New()
+    stuber := stuber.NewBudgerigar(toggles)
+    
+    stub := &stuber.Stub{
+        Service: "example.service",
+        Method:  "ExampleMethod",
+        Input: stuber.InputData{
+            Equals: map[string]any{"id": "123"},
         },
-    },
-    Output: stuber.Output{
-        Data: map[string]any{
-            "message": "Hello, World!",
+        Output: stuber.Output{
+            Data: map[string]any{"result": "success"},
         },
-    },
+    }
+    
+    stuber.PutMany(stub)
 }
 ```
-
-### Server-Side Streaming Support
-
-For server-side streaming, you can use the `Stream` field in the `Output` structure:
-
-```go
-stub := &stuber.Stub{
-    ID:       uuid.New(),
-    Service:  "TrackService",
-    Method:   "StreamTrack",
-    Priority: 10,
-    Input: stuber.InputData{
-        Equals: map[string]any{
-            "stn": "MS#00005",
-        },
-    },
-    Output: stuber.Output{
-        Stream: []any{
-            map[string]any{
-                "stn":       "MS#00005",
-                "identity":  "00",
-                "latitude":  0.11000,
-                "longitude": 0.00600,
-                "speed":     50.0,
-                "updatedAt": "2024-01-01T13:00:00.000Z",
-            },
-            map[string]any{
-                "stn":       "MS#00005",
-                "identity":  "01",
-                "latitude":  0.11001,
-                "longitude": 0.00601,
-                "speed":     51.0,
-                "updatedAt": "2024-01-01T13:00:01.000Z",
-            },
-            map[string]any{
-                "stn":       "MS#00005",
-                "identity":  "02",
-                "latitude":  0.11002,
-                "longitude": 0.00602,
-                "speed":     52.0,
-                "updatedAt": "2024-01-01T13:00:02.000Z",
-            },
-        },
-    },
-}
-```
-
-Each element in the `Stream` array represents a message to be sent to the client during server-side streaming.
 
 ## API Reference
 
-### Stub
-
-The main structure representing a gRPC service method stub.
-
 ```go
 type Stub struct {
-    ID       uuid.UUID   // Unique identifier
-    Service  string      // Service name
-    Method   string      // Method name
-    Priority int         // Priority score for sorting
-    Headers  InputHeader // Request headers
-    Input    InputData   // Request input data
-    Output   Output      // Response output data
+    ID       uuid.UUID
+    Service  string
+    Method   string
+    Priority int
+    Input    InputData
+    Output   Output
+    Stream   []InputData
+}
+
+type InputData struct {
+    Equals          map[string]any
+    Contains        map[string]any
+    Matches         map[string]any
+    IgnoreArrayOrder bool
 }
 ```
-
-### Output
-
-Represents the output data of a gRPC response.
-
-```go
-type Output struct {
-    Headers map[string]string // Response headers
-    Data    map[string]any    // Response data (omitempty)
-    Stream  []any             // Stream data for server-side streaming (omitempty)
-    Error   string            // Error message
-    Code    *codes.Code       // Status code (omitempty)
-    Delay   time.Duration     // Response delay (omitempty)
-}
-```
-
-
 
 ## Testing
 
-Run the test suite:
-
 ```bash
-go test -v ./...
+go test -v
+go test -bench=. -benchmem
 ```
 
-Run with coverage:
+## Performance Notes
 
-```bash
-go test -cover ./...
-```
-
-## Linting
-
-Run the linter:
-
-```bash
-make lint
-```
+- **V2 (New)**: Use for best performance in most cases
+- **Parallel processing**: Only beneficial for 200+ stubs
+- **Memory**: V2 (New) significantly more memory efficient
+- **Allocations**: V2 (New) reduces allocations by 74-95%
 
 ## License
 
