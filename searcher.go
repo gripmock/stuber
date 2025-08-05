@@ -18,11 +18,11 @@ import (
 // Higher values give more weight to explicit priority settings.
 const PriorityMultiplier = 10.0
 
-// Specificity calculation constants
+// Specificity calculation constants.
 const (
-	// EmptySpecificity is returned when no fields match
+	// EmptySpecificity is returned when no fields match.
 	EmptySpecificity = 0
-	// MinStreamLength is the minimum length for stream calculations
+	// MinStreamLength is the minimum length for stream calculations.
 	MinStreamLength = 0
 )
 
@@ -892,7 +892,7 @@ func (s *searcher) searchV2(query QueryV2) (*Result, error) {
 	return s.searchV2Optimized(query)
 }
 
-// searchV2Optimized performs ultra-fast search with minimal allocations
+// searchV2Optimized performs ultra-fast search with minimal allocations.
 func (s *searcher) searchV2Optimized(query QueryV2) (*Result, error) {
 	// Get stubs from storage (single call - optimized)
 	seq, err := s.storage.findAll(query.Service, query.Method)
@@ -912,120 +912,238 @@ func (s *searcher) searchV2Optimized(query QueryV2) (*Result, error) {
 	return s.processStubs(query, stubs)
 }
 
-// processStubs processes the collected stubs with ultra-fast paths
+// processStubs processes the collected stubs with ultra-fast paths.
 func (s *searcher) processStubs(query QueryV2, stubs []*Stub) (*Result, error) {
-	// Ultra-fast path: single stub case (most common)
-	if len(stubs) == 1 {
-		stub := stubs[0]
-		if s.fastMatchV2(query, stub) {
-			s.markV2(query, stub.ID)
-			return &Result{found: stub}, nil
-		}
-		return &Result{similar: stub}, nil
-	}
-
-	// Ultra-fast path: empty result
 	if len(stubs) == 0 {
 		return nil, ErrStubNotFound
 	}
 
-	// Multiple stubs - use ultra-optimized processing
-	var found *Stub
-	var foundRank float64
-	var foundSpecificity int
-	var similar *Stub
-	var similarRank float64
+	if len(stubs) == 1 {
+		stub := stubs[0]
+		if s.fastMatchV2(query, stub) {
+			s.markV2(query, stub.ID)
+
+			return &Result{found: stub}, nil
+		}
+
+		return &Result{similar: stub}, nil
+	}
+
+	// Parallel processing for multiple stubs
+	if len(stubs) >= 100 {
+		return s.processStubsParallel(query, stubs)
+	}
+
+	// Single-threaded processing for small sets
+	return s.processStubsSequential(query, stubs)
+}
+
+// processStubsSequential processes stubs sequentially (original logic).
+func (s *searcher) processStubsSequential(query QueryV2, stubs []*Stub) (*Result, error) {
+	var (
+		bestMatch       *Stub
+		bestScore       float64
+		bestSpecificity int
+		mostSimilar     *Stub
+		highestRank     float64
+	)
 
 	for _, stub := range stubs {
-		// Ultra-fast ranking with minimal allocations
 		rank := s.fastRankV2(query, stub)
 		priorityBonus := float64(stub.Priority) * PriorityMultiplier
-
-		// Calculate specificity (number of matched fields) - universal approach
 		specificity := s.calcSpecificity(stub, query)
+		totalScore := rank + priorityBonus
 
-		totalRank := rank + priorityBonus
-
-		// Ultra-fast matching
 		if s.fastMatchV2(query, stub) {
-			// Choose stub with higher specificity first, then by rank
-			if specificity > foundSpecificity || (specificity == foundSpecificity && totalRank > foundRank) {
-				found, foundRank, foundSpecificity = stub, totalRank, specificity
+			if specificity > bestSpecificity || (specificity == bestSpecificity && totalScore > bestScore) {
+				bestMatch, bestScore, bestSpecificity = stub, totalScore, specificity
 			}
-		} else if totalRank > similarRank {
-			similar, similarRank = stub, totalRank
+		}
+
+		if totalScore > highestRank { // Track most similar even if not exact match
+			mostSimilar, highestRank = stub, totalScore
 		}
 	}
 
-	if found != nil {
-		s.markV2(query, found.ID)
-		return &Result{found: found}, nil
+	if bestMatch != nil {
+		s.markV2(query, bestMatch.ID)
+
+		return &Result{found: bestMatch}, nil
 	}
 
-	if similar != nil {
-		return &Result{similar: similar}, nil
+	if mostSimilar != nil {
+		return &Result{similar: mostSimilar}, nil
 	}
 
 	return nil, ErrStubNotFound
 }
 
-// fastMatchV2 is an ultra-optimized version of matchV2
-func (s *searcher) fastMatchV2(query QueryV2, stub *Stub) bool {
-	// Check headers first (required for correctness)
-	if len(query.Headers) > 0 {
-		if !matchHeaders(query.Headers, stub.Headers) {
-			return false
+// processStubsParallel processes stubs in parallel using goroutines.
+func (s *searcher) processStubsParallel(query QueryV2, stubs []*Stub) (*Result, error) {
+	const chunkSize = 50 // Process stubs in chunks of 50
+
+	numChunks := (len(stubs) + chunkSize - 1) / chunkSize
+
+	// Channels for collecting results from goroutines
+	bestMatchChan := make(chan *Stub, numChunks)
+	mostSimilarChan := make(chan *Stub, numChunks)
+	errorChan := make(chan error, numChunks)
+
+	// Launch goroutines for each chunk
+	for i := 0; i < numChunks; i++ {
+		start := i * chunkSize
+
+		end := start + chunkSize
+		if end > len(stubs) {
+			end = len(stubs)
+		}
+
+		go func(chunkStubs []*Stub) {
+			var (
+				bestMatch       *Stub
+				bestScore       float64
+				bestSpecificity int
+				mostSimilar     *Stub
+				highestRank     float64
+			)
+
+			for _, stub := range chunkStubs {
+				rank := s.fastRankV2(query, stub)
+				priorityBonus := float64(stub.Priority) * PriorityMultiplier
+				specificity := s.calcSpecificity(stub, query)
+				totalScore := rank + priorityBonus
+
+				if s.fastMatchV2(query, stub) {
+					if specificity > bestSpecificity || (specificity == bestSpecificity && totalScore > bestScore) {
+						bestMatch, bestScore, bestSpecificity = stub, totalScore, specificity
+					}
+				}
+
+				if totalScore > highestRank {
+					mostSimilar, highestRank = stub, totalScore
+				}
+			}
+
+			bestMatchChan <- bestMatch
+
+			mostSimilarChan <- mostSimilar
+
+			errorChan <- nil
+		}(stubs[start:end])
+	}
+
+	// Collect results from all goroutines
+	var (
+		bestMatches  []*Stub
+		mostSimilars []*Stub
+	)
+
+	for i := 0; i < numChunks; i++ {
+		err := <-errorChan
+		if err != nil {
+			return nil, err
+		}
+
+		if bestMatch := <-bestMatchChan; bestMatch != nil {
+			bestMatches = append(bestMatches, bestMatch)
+		}
+
+		if mostSimilar := <-mostSimilarChan; mostSimilar != nil {
+			mostSimilars = append(mostSimilars, mostSimilar)
 		}
 	}
 
-	// Empty input case - no match
+	// Find the best match among all chunks
+	var (
+		bestMatch       *Stub
+		bestScore       float64
+		bestSpecificity int
+	)
+
+	for _, stub := range bestMatches {
+		rank := s.fastRankV2(query, stub)
+		priorityBonus := float64(stub.Priority) * PriorityMultiplier
+		specificity := s.calcSpecificity(stub, query)
+		totalScore := rank + priorityBonus
+
+		if specificity > bestSpecificity || (specificity == bestSpecificity && totalScore > bestScore) {
+			bestMatch, bestScore, bestSpecificity = stub, totalScore, specificity
+		}
+	}
+
+	// Find the most similar among all chunks
+	var (
+		mostSimilar *Stub
+		highestRank float64
+	)
+
+	for _, stub := range mostSimilars {
+		rank := s.fastRankV2(query, stub)
+		priorityBonus := float64(stub.Priority) * PriorityMultiplier
+		totalScore := rank + priorityBonus
+
+		if totalScore > highestRank {
+			mostSimilar, highestRank = stub, totalScore
+		}
+	}
+
+	// Return results
+	if bestMatch != nil {
+		s.markV2(query, bestMatch.ID)
+
+		return &Result{found: bestMatch}, nil
+	}
+
+	if mostSimilar != nil {
+		return &Result{similar: mostSimilar}, nil
+	}
+
+	return nil, ErrStubNotFound
+}
+
+// fastMatchV2 is an ultra-optimized version of matchV2.
+func (s *searcher) fastMatchV2(query QueryV2, stub *Stub) bool {
+	if len(query.Headers) > 0 && !matchHeaders(query.Headers, stub.Headers) {
+		return false
+	}
+
 	if len(query.Input) == 0 {
 		return false
 	}
 
-	// Fast path: unary case (most common)
 	if len(stub.Stream) == 0 && len(query.Input) == 1 {
 		return s.fastMatchInput(query.Input[0], stub.Input)
 	}
 
-	// Stream case
 	if len(stub.Stream) > 0 {
 		return s.fastMatchStream(query.Input, stub.Stream)
 	}
 
-	// Multiple stream items but no stream in stub - no match (original behavior)
 	return false
 }
 
-// fastRankV2 is an ultra-optimized version of rankMatchV2
+// fastRankV2 is an ultra-optimized version of rankMatchV2.
 func (s *searcher) fastRankV2(query QueryV2, stub *Stub) float64 {
-	// Check headers first (required for correctness)
-	if len(query.Headers) > 0 {
-		if !matchHeaders(query.Headers, stub.Headers) {
-			return 0
-		}
+	if len(query.Headers) > 0 && !matchHeaders(query.Headers, stub.Headers) {
+		return 0
 	}
 
-	// Empty input case - no rank
 	if len(query.Input) == 0 {
 		return 0
 	}
 
-	// Fast path: unary case (most common)
 	if len(stub.Stream) == 0 && len(query.Input) == 1 {
 		return s.fastRankInput(query.Input[0], stub.Input)
 	}
 
-	// Stream case
 	if len(stub.Stream) > 0 {
 		return s.fastRankStream(query.Input, stub.Stream)
 	}
 
-	// Multiple stream items but no stream in stub - no rank (original behavior)
 	return 0
 }
 
-// fastMatchInput is an ultra-optimized version of matchInput
+// fastMatchInput is an ultra-optimized version of matchInput.
 func (s *searcher) fastMatchInput(queryData map[string]any, stubInput InputData) bool {
 	// Fast path: empty query
 	if len(queryData) == 0 {
@@ -1051,7 +1169,7 @@ func (s *searcher) fastMatchInput(queryData map[string]any, stubInput InputData)
 	return matchInput(queryData, stubInput)
 }
 
-// fastMatchStream is an ultra-optimized version of matchStreamElements
+// fastMatchStream is an ultra-optimized version of matchStreamElements.
 func (s *searcher) fastMatchStream(queryStream []map[string]any, stubStream []InputData) bool {
 	// Fast path: single element
 	if len(queryStream) == 1 && len(stubStream) == 1 {
@@ -1062,7 +1180,7 @@ func (s *searcher) fastMatchStream(queryStream []map[string]any, stubStream []In
 	return matchStreamElements(queryStream, stubStream)
 }
 
-// fastRankInput is an ultra-optimized version of rankInput
+// fastRankInput is an ultra-optimized version of rankInput.
 func (s *searcher) fastRankInput(queryData map[string]any, stubInput InputData) float64 {
 	// Fast path: empty query
 	if len(queryData) == 0 {
@@ -1074,6 +1192,7 @@ func (s *searcher) fastRankInput(queryData map[string]any, stubInput InputData) 
 		if equals(stubInput.Equals, queryData, stubInput.IgnoreArrayOrder) {
 			return 1.0
 		}
+
 		return 0
 	}
 
@@ -1081,7 +1200,7 @@ func (s *searcher) fastRankInput(queryData map[string]any, stubInput InputData) 
 	return rankInput(queryData, stubInput)
 }
 
-// fastRankStream is an ultra-optimized version of rankStreamElements
+// fastRankStream is an ultra-optimized version of rankStreamElements.
 func (s *searcher) fastRankStream(queryStream []map[string]any, stubStream []InputData) float64 {
 	// Fast path: single element
 	if len(queryStream) == 1 && len(stubStream) == 1 {
@@ -1162,35 +1281,19 @@ func (s *searcher) wrap(err error) error {
 
 // calcSpecificity calculates the specificity score for a stub against a query.
 // Higher specificity means more fields match between stub and query.
-// This function is universal and handles all cases:
-// - Unary requests (single input)
-// - Stream requests (multiple inputs with stream stubs)
-// - Empty inputs (no match)
-// - Multiple inputs without stream stubs (no match, original behavior)
-//
-// Parameters:
-// - stub: The stub to calculate specificity for
-// - query: The query to match against
-//
-// Returns:
-// - int: The specificity score (higher = more specific match)
 func (s *searcher) calcSpecificity(stub *Stub, query QueryV2) int {
-	// Empty input case - no specificity
 	if len(query.Input) == 0 {
 		return 0
 	}
 
-	// For unary case (most common)
 	if len(stub.Stream) == 0 && len(query.Input) == 1 {
 		return s.calcSpecificityUnary(stub.Input, query.Input[0])
 	}
 
-	// For stream case
 	if len(stub.Stream) > 0 {
 		return s.calcSpecificityStream(stub.Stream, query.Input)
 	}
 
-	// For multiple inputs but no stream stub - return 0 (original behavior)
 	return 0
 }
 
@@ -1203,56 +1306,42 @@ func (s *searcher) calcSpecificity(stub *Stub, query QueryV2) int {
 // - queryData: The query's input data
 //
 // Returns:
-// - int: The number of matching fields
+// - int: The number of matching fields.
 func (s *searcher) calcSpecificityUnary(stubInput InputData, queryData map[string]any) int {
 	specificity := 0
 
-	// Helper function to count matching fields
-	countMatchingFields := func(stubFields map[string]any) int {
-		count := 0
-		for key := range stubFields {
-			if _, exists := queryData[key]; exists {
-				count++
-			}
-		}
-		return count
-	}
-
 	// Count equals fields
-	if len(stubInput.Equals) > 0 {
-		specificity += countMatchingFields(stubInput.Equals)
+	for key := range stubInput.Equals {
+		if _, exists := queryData[key]; exists {
+			specificity++
+		}
 	}
 
 	// Count contains fields
-	if len(stubInput.Contains) > 0 {
-		specificity += countMatchingFields(stubInput.Contains)
+	for key := range stubInput.Contains {
+		if _, exists := queryData[key]; exists {
+			specificity++
+		}
 	}
 
 	// Count matches fields
-	if len(stubInput.Matches) > 0 {
-		specificity += countMatchingFields(stubInput.Matches)
+	for key := range stubInput.Matches {
+		if _, exists := queryData[key]; exists {
+			specificity++
+		}
 	}
 
 	return specificity
 }
 
 // calcSpecificityStream calculates specificity for stream case.
-// Calculates the total specificity across all stream elements.
-// Uses the minimum length of stub and query streams to avoid index out of bounds.
-//
-// Parameters:
-// - stubStream: The stub's stream data
-// - queryStream: The query's stream data
-//
-// Returns:
-// - int: The total specificity across all stream elements
 func (s *searcher) calcSpecificityStream(stubStream []InputData, queryStream []map[string]any) int {
 	if len(stubStream) == 0 || len(queryStream) == 0 {
 		return 0
 	}
 
-	// For stream, calculate total specificity across all elements
 	totalSpecificity := 0
+
 	minLen := len(stubStream)
 	if len(queryStream) < minLen {
 		minLen = len(queryStream)

@@ -9,7 +9,7 @@ import (
 	"github.com/gripmock/stuber"
 )
 
-// BenchmarkV1vsV2_Found compares V1 vs V2 when stub is found
+// BenchmarkV1vsV2_Found compares V1 vs V2 when stub is found.
 func BenchmarkV1vsV2_Found(b *testing.B) {
 	// V1 Test - Found case
 	b.Run("V1_Found", func(b *testing.B) {
@@ -35,7 +35,7 @@ func BenchmarkV1vsV2_Found(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			_, _ = budgerigar.FindByQuery(query)
 		}
 	})
@@ -64,20 +64,20 @@ func BenchmarkV1vsV2_Found(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			_, _ = budgerigar.FindByQueryV2(query)
 		}
 	})
 }
 
-// BenchmarkV1vsV2_NotFound compares V1 vs V2 when stub is not found
+// BenchmarkV1vsV2_NotFound compares V1 vs V2 when stub is not found.
 func BenchmarkV1vsV2_NotFound(b *testing.B) {
 	// V1 Test - Not Found case
 	b.Run("V1_NotFound", func(b *testing.B) {
 		budgerigar := stuber.NewBudgerigar(features.New())
 
 		// Add some stubs but search for different one
-		for i := 0; i < 100; i++ {
+		for i := range 100 {
 			stub := &stuber.Stub{
 				ID:      uuid.New(),
 				Service: "service-" + string(rune(i)),
@@ -98,7 +98,7 @@ func BenchmarkV1vsV2_NotFound(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			_, _ = budgerigar.FindByQuery(query)
 		}
 	})
@@ -108,7 +108,7 @@ func BenchmarkV1vsV2_NotFound(b *testing.B) {
 		budgerigar := stuber.NewBudgerigar(features.New())
 
 		// Add some stubs but search for different one
-		for i := 0; i < 100; i++ {
+		for i := range 100 {
 			stub := &stuber.Stub{
 				ID:      uuid.New(),
 				Service: "service-" + string(rune(i)),
@@ -129,20 +129,20 @@ func BenchmarkV1vsV2_NotFound(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			_, _ = budgerigar.FindByQueryV2(query)
 		}
 	})
 }
 
-// BenchmarkV1vsV2_MultipleStubs compares V1 vs V2 with multiple matching stubs
+// BenchmarkV1vsV2_MultipleStubs compares V1 vs V2 with multiple matching stubs.
 func BenchmarkV1vsV2_MultipleStubs(b *testing.B) {
 	// V1 Test - Multiple stubs
 	b.Run("V1_Multiple", func(b *testing.B) {
 		budgerigar := stuber.NewBudgerigar(features.New())
 
 		// Add multiple stubs with same service/method but different priorities
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			stub := &stuber.Stub{
 				ID:       uuid.New(),
 				Service:  "test-service",
@@ -164,7 +164,7 @@ func BenchmarkV1vsV2_MultipleStubs(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			_, _ = budgerigar.FindByQuery(query)
 		}
 	})
@@ -174,7 +174,7 @@ func BenchmarkV1vsV2_MultipleStubs(b *testing.B) {
 		budgerigar := stuber.NewBudgerigar(features.New())
 
 		// Add multiple stubs with same service/method but different priorities
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			stub := &stuber.Stub{
 				ID:       uuid.New(),
 				Service:  "test-service",
@@ -196,13 +196,13 @@ func BenchmarkV1vsV2_MultipleStubs(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			_, _ = budgerigar.FindByQueryV2(query)
 		}
 	})
 }
 
-// BenchmarkV1vsV2_Stream compares V1 vs V2 for streaming scenarios
+// BenchmarkV1vsV2_Stream compares V1 vs V2 for streaming scenarios.
 func BenchmarkV1vsV2_Stream(b *testing.B) {
 	// V1 Test - Stream
 	b.Run("V1_Stream", func(b *testing.B) {
@@ -228,7 +228,7 @@ func BenchmarkV1vsV2_Stream(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			_, _ = budgerigar.FindByQuery(query)
 		}
 	})
@@ -257,7 +257,7 @@ func BenchmarkV1vsV2_Stream(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			_, _ = budgerigar.FindByQueryV2(query)
 		}
 	})

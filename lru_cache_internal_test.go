@@ -78,7 +78,7 @@ func TestLRUCacheEviction(t *testing.T) {
 	s := newStorage()
 
 	// Fill string hash cache beyond capacity
-	for i := 0; i < 10050; i++ {
+	for i := range 10050 {
 		s.id("test" + string(rune(i)))
 	}
 
@@ -99,22 +99,24 @@ func TestCacheConcurrency(t *testing.T) {
 
 	// Test concurrent string hash caching
 	done := make(chan bool, 10)
-	for i := 0; i < 10; i++ {
+
+	for i := range 10 {
 		go func(id int) {
-			for j := 0; j < 100; j++ {
+			for j := range 100 {
 				s.id("concurrent" + string(rune(id)) + string(rune(j)))
 			}
+
 			done <- true
 		}(i)
 	}
 
 	// Wait for all goroutines to complete
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		<-done
 	}
 
 	// Check that cache is still functional
 	size, capacity := getStringHashCacheStats()
 	require.LessOrEqual(t, size, capacity)
-	require.Greater(t, size, 0)
+	require.Positive(t, size)
 }

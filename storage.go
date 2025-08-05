@@ -95,7 +95,7 @@ func (s *storage) yieldSortedValues(indexes []uint64, yield func(Value) bool) {
 	s.yieldSortedValuesOptimized(indexes, yield)
 }
 
-// yieldSortedValuesOptimized is an ultra-optimized version with minimal allocations
+// yieldSortedValuesOptimized is an ultra-optimized version with minimal allocations.
 func (s *storage) yieldSortedValuesOptimized(indexes []uint64, yield func(Value) bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -108,6 +108,7 @@ func (s *storage) yieldSortedValuesOptimized(indexes []uint64, yield func(Value)
 					return
 				}
 			}
+
 			return
 		}
 	}
@@ -129,9 +130,11 @@ func (s *storage) yieldSortedValuesOptimized(indexes []uint64, yield func(Value)
 						return
 					}
 				}
+
 				return
 			}
 		}
+
 		return
 	}
 
@@ -158,9 +161,11 @@ func (s *storage) yieldSortedValuesOptimized(indexes []uint64, yield func(Value)
 			if items[0].Score() < items[1].Score() {
 				items[0], items[1] = items[1], items[0]
 			}
+
 			if items[1].Score() < items[2].Score() {
 				items[1], items[2] = items[2], items[1]
 			}
+
 			if items[0].Score() < items[1].Score() {
 				items[0], items[1] = items[1], items[0]
 			}
@@ -171,6 +176,7 @@ func (s *storage) yieldSortedValuesOptimized(indexes []uint64, yield func(Value)
 				return
 			}
 		}
+
 		return
 	}
 
@@ -178,40 +184,26 @@ func (s *storage) yieldSortedValuesOptimized(indexes []uint64, yield func(Value)
 	s.yieldSortedValuesHeap(indexes, yield)
 }
 
-// sortItem represents a value with its score for sorting
+// sortItem represents a value with its score for sorting.
 type sortItem struct {
 	value Value
 	score int
 }
 
-// countItemsFast provides ultra-fast counting of items without collecting them
+// countItemsFast provides ultra-fast counting of items without collecting them.
 func (s *storage) countItemsFast(indexes []uint64) int {
 	total := 0
+
 	for _, index := range indexes {
 		if m, exists := s.items[index]; exists {
 			total += len(m)
 		}
 	}
+
 	return total
 }
 
-// countItemsFastSingle provides ultra-fast counting for single index
-func (s *storage) countItemsFastSingle(index uint64) int {
-	if m, exists := s.items[index]; exists {
-		return len(m)
-	}
-	return 0
-}
-
-// getItemsFast provides ultra-fast item retrieval for single index
-func (s *storage) getItemsFast(index uint64) map[uuid.UUID]Value {
-	if m, exists := s.items[index]; exists {
-		return m
-	}
-	return nil
-}
-
-// scoreHeap implements heap.Interface for sorting by score
+// scoreHeap implements heap.Interface for sorting by score.
 type scoreHeap []sortItem
 
 func (h scoreHeap) Len() int           { return len(h) }
@@ -223,10 +215,11 @@ func (h *scoreHeap) Pop() any {
 	n := len(old)
 	x := old[n-1]
 	*h = old[0 : n-1]
+
 	return x
 }
 
-// yieldSortedValuesHeap uses heap-based sorting for O(N log N) performance
+// yieldSortedValuesHeap uses heap-based sorting for O(N log N) performance.
 func (s *storage) yieldSortedValuesHeap(indexes []uint64, yield func(Value) bool) {
 	// Ultra-fast path: single index with single value (most common case)
 	if len(indexes) == 1 {
@@ -236,6 +229,7 @@ func (s *storage) yieldSortedValuesHeap(indexes []uint64, yield func(Value) bool
 					return
 				}
 			}
+
 			return
 		}
 	}
@@ -250,18 +244,20 @@ func (s *storage) yieldSortedValuesHeap(indexes []uint64, yield func(Value) bool
 					items = append(items, sortItem{value: v, score: v.Score()})
 				}
 				// Sort in descending order
-				for i := 0; i < len(items)-1; i++ {
+				for i := range len(items) - 1 {
 					for j := i + 1; j < len(items); j++ {
 						if items[i].score < items[j].score {
 							items[i], items[j] = items[j], items[i]
 						}
 					}
 				}
+
 				for _, item := range items {
 					if !yield(item.value) {
 						return
 					}
 				}
+
 				return
 			}
 		}
@@ -443,7 +439,7 @@ func (s *storage) del(keys ...uuid.UUID) int {
 	return deleted
 }
 
-// Global LRU cache for string hashes with size limit
+// Global LRU cache for string hashes with size limit.
 var globalStringCache *lru.Cache[string, uint32]
 
 func init() {
@@ -464,25 +460,21 @@ func (s *storage) id(value string) uint32 {
 	// Calculate hash and store in cache
 	hash := uint32(xxh3.HashString(value)) //nolint:gosec
 	globalStringCache.Add(value, hash)
+
 	return hash
 }
 
-// getStringHashCacheSize returns the current size of the string hash cache
-func getStringHashCacheSize() int {
-	return globalStringCache.Len()
-}
-
-// clearStringHashCache clears the string hash cache
+// clearStringHashCache clears the string hash cache.
 func clearStringHashCache() {
 	globalStringCache.Purge()
 }
 
-// getStringHashCacheStats returns cache statistics
+// getStringHashCacheStats returns cache statistics.
 func getStringHashCacheStats() (int, int) {
 	return globalStringCache.Len(), 10000 // Fixed capacity
 }
 
-// ClearAllCaches clears all LRU caches (for testing purposes)
+// ClearAllCaches clears all LRU caches (for testing purposes).
 func ClearAllCaches() {
 	clearStringHashCache()
 	clearRegexCache()

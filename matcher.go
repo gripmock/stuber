@@ -4,11 +4,12 @@ import (
 	"reflect"
 	"regexp"
 
-	"github.com/gripmock/deeply"
 	lru "github.com/hashicorp/golang-lru/v2"
+
+	"github.com/gripmock/deeply"
 )
 
-// Global LRU cache for regex patterns with size limit
+// Global LRU cache for regex patterns with size limit.
 var regexCache *lru.Cache[string, *regexp.Regexp]
 
 func init() {
@@ -20,7 +21,7 @@ func init() {
 	}
 }
 
-// Get retrieves a compiled regex from cache or compiles it if not found
+// Get retrieves a compiled regex from cache or compiles it if not found.
 func getRegex(pattern string) (*regexp.Regexp, error) {
 	// Try to get from cache first
 	if re, exists := regexCache.Get(pattern); exists {
@@ -32,15 +33,16 @@ func getRegex(pattern string) (*regexp.Regexp, error) {
 	if err == nil {
 		regexCache.Add(pattern, re)
 	}
+
 	return re, err
 }
 
-// getRegexCacheStats returns regex cache statistics
+// getRegexCacheStats returns regex cache statistics.
 func getRegexCacheStats() (int, int) {
 	return regexCache.Len(), 1000 // Fixed capacity
 }
 
-// clearRegexCache clears the regex cache
+// clearRegexCache clears the regex cache.
 func clearRegexCache() {
 	regexCache.Purge()
 }
@@ -123,6 +125,7 @@ func equals(expected map[string]any, actual any, orderIgnore bool) bool {
 			if !exists {
 				return false
 			}
+
 			if orderIgnore {
 				if eSlice, eOk := expectedValue.([]any); eOk {
 					if aSlice, aOk := actualValue.([]any); aOk {
@@ -130,6 +133,7 @@ func equals(expected map[string]any, actual any, orderIgnore bool) bool {
 					}
 				}
 			}
+
 			return ultraFastSpecializedEquals(expectedValue, actualValue)
 		}
 	}
@@ -140,152 +144,28 @@ func equals(expected map[string]any, actual any, orderIgnore bool) bool {
 		if !exists {
 			return false
 		}
+
 		if orderIgnore {
 			if eSlice, eOk := expectedValue.([]any); eOk {
 				if aSlice, aOk := actualValue.([]any); aOk {
 					if !deeply.EqualsIgnoreArrayOrder(eSlice, aSlice) {
 						return false
 					}
+
 					continue
 				}
 			}
 		}
+
 		if !ultraFastSpecializedEquals(expectedValue, actualValue) {
 			return false
 		}
 	}
+
 	return true
 }
 
-// fastStringEquals provides ultra-fast string comparison
-func fastStringEquals(expected, actual any) bool {
-	if e, ok := expected.(string); ok {
-		if a, ok := actual.(string); ok {
-			return e == a
-		}
-	}
-	return false
-}
-
-// fastNumberEquals provides ultra-fast number comparison
-func fastNumberEquals(expected, actual any) bool {
-	switch e := expected.(type) {
-	case float64:
-		switch a := actual.(type) {
-		case float64:
-			return e == a
-		case int:
-			return e == float64(a)
-		case int64:
-			return e == float64(a)
-		}
-	case int:
-		switch a := actual.(type) {
-		case float64:
-			return float64(e) == a
-		case int:
-			return e == a
-		case int64:
-			return e == int(actual.(int64))
-		}
-	case int64:
-		switch a := actual.(type) {
-		case float64:
-			return float64(e) == a
-		case int:
-			return int64(a) == e
-		case int64:
-			return e == a
-		}
-	}
-	return false
-}
-
-// fastBoolEquals provides ultra-fast boolean comparison
-func fastBoolEquals(expected, actual any) bool {
-	if e, ok := expected.(bool); ok {
-		if a, ok := actual.(bool); ok {
-			return e == a
-		}
-	}
-	return false
-}
-
-// ultraFastEquals is an ultra-optimized version of equals for single value comparison
-func ultraFastEquals(expected, actual any, orderIgnore bool) bool {
-	// Fast path: same type comparison
-	if reflect.TypeOf(expected) == reflect.TypeOf(actual) {
-		switch expected.(type) {
-		case string:
-			return fastStringEquals(expected, actual)
-		case float64, int, int64:
-			return fastNumberEquals(expected, actual)
-		case bool:
-			return fastBoolEquals(expected, actual)
-		}
-	}
-
-	// Ultra-fast path: string comparison (most common)
-	if expectedStr, expectedIsStr := expected.(string); expectedIsStr {
-		if actualStr, actualIsStr := actual.(string); actualIsStr {
-			return expectedStr == actualStr
-		}
-		return false
-	}
-
-	// Ultra-fast path: number comparison
-	if expectedNum, expectedIsNum := expected.(float64); expectedIsNum {
-		switch actualNum := actual.(type) {
-		case float64:
-			return expectedNum == actualNum
-		case int:
-			return expectedNum == float64(actualNum)
-		case int64:
-			return expectedNum == float64(actualNum)
-		}
-		return false
-	}
-
-	if expectedNum, expectedIsNum := expected.(int); expectedIsNum {
-		switch actualNum := actual.(type) {
-		case float64:
-			return float64(expectedNum) == actualNum
-		case int:
-			return expectedNum == actualNum
-		case int64:
-			return expectedNum == int(actualNum)
-		}
-		return false
-	}
-
-	if expectedNum, expectedIsNum := expected.(int64); expectedIsNum {
-		switch actualNum := actual.(type) {
-		case float64:
-			return float64(expectedNum) == actualNum
-		case int:
-			return int64(actualNum) == expectedNum
-		case int64:
-			return expectedNum == actualNum
-		}
-		return false
-	}
-
-	// Ultra-fast path: bool comparison
-	if expectedBool, expectedIsBool := expected.(bool); expectedIsBool {
-		if actualBool, actualIsBool := actual.(bool); actualIsBool {
-			return expectedBool == actualBool
-		}
-		return false
-	}
-
-	// For other types, use optimized comparison
-	if orderIgnore {
-		return deeply.EqualsIgnoreArrayOrder(expected, actual)
-	}
-	return reflect.DeepEqual(expected, actual)
-}
-
-// ultraFastSpecializedEquals provides ultra-fast comparison for common types without reflect
+// ultraFastSpecializedEquals provides ultra-fast comparison for common types without reflect.
 func ultraFastSpecializedEquals(expected, actual any) bool {
 	// Ultra-fast path: same type comparison (most common case)
 	if reflect.TypeOf(expected) == reflect.TypeOf(actual) {
@@ -368,28 +248,6 @@ func matches(expected map[string]any, actual any, _ bool) bool {
 	}
 
 	return deeply.MatchesIgnoreArrayOrder(expected, actual)
-}
-
-// matchV2 checks if a given QueryV2 matches a given stub.
-// Optimized version with minimal allocations and checks.
-func matchV2(query QueryV2, stub *Stub) bool {
-	// Fast path: check headers first (most common failure case)
-	if len(query.Headers) > 0 && !matchHeaders(query.Headers, stub.Headers) {
-		return false
-	}
-
-	// Fast path: unary case (most common case)
-	if len(stub.Stream) == 0 && len(query.Input) == 1 {
-		return matchInput(query.Input[0], stub.Input)
-	}
-
-	// Stream case
-	if len(stub.Stream) > 0 {
-		return matchStreamElements(query.Input, stub.Stream)
-	}
-
-	// Multiple stream items but no stream in stub - no match
-	return false
 }
 
 // rankMatchV2 ranks how well a given QueryV2 matches a given stub.
