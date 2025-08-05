@@ -1,172 +1,118 @@
 # Stuber
 
-High-performance gRPC stub management for Go.
+High-performance gRPC stub server with advanced matching capabilities.
 
-## Quick Start
+## Performance Results
+
+### V1 (Old) vs V2 (New) Comparison
+
+| Benchmark | V1 (Old) | V2 (New) | Improvement |
+|-----------|----------|----------|-------------|
+| **Found** | 1,568 ns/op | 294.1 ns/op | **5.3x faster** |
+| **NotFound** | 70.0 ns/op | 61.0 ns/op | **15% faster** |
+| **Multiple Stubs** | 15,635 ns/op | 2,022 ns/op | **7.7x faster** |
+
+### Memory Usage
+
+| Benchmark | V1 (Old) Memory | V2 (New) Memory | Improvement |
+|-----------|-----------------|-----------------|-------------|
+| **Found** | 608 B/op | 136 B/op | **78% less** |
+| **Multiple Stubs** | 7,959 B/op | 616 B/op | **92% less** |
+| **Stream** | 160 B/op | 136 B/op | **15% less** |
+
+### Allocations
+
+| Benchmark | V1 (Old) Allocs | V2 (New) Allocs | Improvement |
+|-----------|-----------------|-----------------|-------------|
+| **Found** | 27 allocs/op | 7 allocs/op | **74% less** |
+| **Multiple Stubs** | 262 allocs/op | 12 allocs/op | **95% less** |
+| **Stream** | 8 allocs/op | 7 allocs/op | **13% less** |
+
+## Parallel Processing Results
+
+| Stub Count | Sequential | Parallel | Improvement |
+|------------|------------|----------|-------------|
+| 50 | 7,023 ns/op | 7,060 ns/op | **1% slower** |
+| 100 | 13,967 ns/op | 15,604 ns/op | **12% slower** |
+| 200 | 30,658 ns/op | 26,657 ns/op | **13% faster** |
+| 500 | 72,135 ns/op | 53,036 ns/op | **26% faster** |
+
+**Note**: Parallel processing activates at 100+ stubs. Below 200 stubs, sequential is faster due to overhead.
+
+## Key Features
+
+- **Exact matching** with field-level precision
+- **Array order ignoring** with `ignoreArrayOrder: true`
+- **Regex pattern matching** with caching
+- **Priority-based selection** with specificity scoring
+- **Stream support**: Unary, Server, Client, Bidirectional
+- **LRU caching** for string hashes and regex patterns
+- **Memory pools** for zero-allocation operations
+
+## Usage
 
 ```go
 package main
 
-import "github.com/gripmock/stuber"
+import (
+    "github.com/gripmock/stuber"
+    "github.com/gripmock/stuber/features"
+)
 
 func main() {
-	// Create stub
-	stub := &stuber.Stub{
-		Service: "Greeter",
-		Method:  "SayHello",
-		Input: stuber.InputData{
-			Equals: map[string]any{"name": "World"},
-		},
-		Output: stuber.Output{
-			Data: map[string]any{"message": "Hello, World!"},
-		},
-	}
-
-	// Use
-	s := stuber.NewBudgerigar(nil)
-	s.PutMany(stub)
-
-	query := stuber.QueryV2{
-		Service: "Greeter",
-		Method:  "SayHello",
-		Input:   []map[string]any{{"name": "World"}},
-	}
-	result, _ := s.FindByQueryV2(query)
+    toggles := features.NewToggles()
+    stuber := stuber.NewBudgerigar(toggles)
+    
+    stub := &stuber.Stub{
+        Service: "example.service",
+        Method:  "ExampleMethod",
+        Input: stuber.InputData{
+            Equals: map[string]any{"id": "123"},
+        },
+        Output: stuber.Output{
+            Data: map[string]any{"result": "success"},
+        },
+    }
+    
+    stuber.PutMany(stub)
 }
 ```
 
-## Examples
+## API Reference
 
-### Unary RPC
-```go
-stub := &stuber.Stub{
-	Service: "UserService",
-	Method:  "GetUser",
-	Input: stuber.InputData{
-		Equals: map[string]any{"user_id": "123"},
-	},
-	Output: stuber.Output{
-		Data: map[string]any{
-			"user": map[string]any{
-				"id":   "123",
-				"name": "John",
-			},
-		},
-	},
-}
-```
-
-### Server Streaming
-```go
-stub := &stuber.Stub{
-	Service: "NotificationService",
-	Method:  "Subscribe",
-	Input: stuber.InputData{
-		Equals: map[string]any{"user_id": "123"},
-	},
-	Output: stuber.Output{
-		Stream: []any{
-			map[string]any{"type": "notification", "message": "Welcome!"},
-			map[string]any{"type": "notification", "message": "New message"},
-		},
-	},
-}
-```
-
-### Client Streaming
-```go
-stub := &stuber.Stub{
-	Service: "FileService",
-	Method:  "UploadFile",
-	Stream: []stuber.InputData{
-		{Equals: map[string]any{"chunk": 1, "data": "header"}},
-		{Equals: map[string]any{"chunk": 2, "data": "content"}},
-	},
-	Output: stuber.Output{
-		Data: map[string]any{
-			"status":  "uploaded",
-			"file_id": "abc123",
-		},
-	},
-}
-```
-
-### Bidirectional Streaming
-```go
-stub := &stuber.Stub{
-	Service: "ChatService",
-	Method:  "Chat",
-	Stream: []stuber.InputData{
-		{Equals: map[string]any{"message": "hello"}},
-		{Equals: map[string]any{"message": "world"}},
-	},
-	Output: stuber.Output{
-		Data: map[string]any{"response": "Conversation completed!"},
-	},
-}
-
-// Usage
-query := stuber.QueryBidi{
-	Service: "ChatService",
-	Method:  "Chat",
-}
-result, _ := s.FindByQueryBidi(query)
-
-stub, _ := result.Next(map[string]any{"message": "hello"})
-stub, _ := result.Next(map[string]any{"message": "world"})
-```
-
-## Performance
-
-| Scenario | V1 | V2 | Improvement |
-|----------|----|----|-------------|
-| Found | 1,421 ns/op | 322 ns/op | **4.4x faster** |
-| Not Found | 71 ns/op | 59 ns/op | **1.2x faster** |
-| Multiple Stubs | 15,327 ns/op | 1,445 ns/op | **10.6x faster** |
-
-## API
-
-### Stub
 ```go
 type Stub struct {
-	ID       uuid.UUID
-	Service  string
-	Method   string
-	Priority int
-	Input    InputData   // For unary/server streaming
-	Stream   []InputData // For client/bidirectional streaming
-	Output   Output
+    ID       uuid.UUID
+    Service  string
+    Method   string
+    Priority int
+    Input    InputData
+    Output   Output
+    Stream   []InputData
+}
+
+type InputData struct {
+    Equals          map[string]any
+    Contains        map[string]any
+    Matches         map[string]any
+    IgnoreArrayOrder bool
 }
 ```
 
-### QueryV2
-```go
-type QueryV2 struct {
-	Service string
-	Method  string
-	Headers map[string]any
-	Input   []map[string]any
-}
+## Testing
+
+```bash
+go test -v
+go test -bench=. -benchmem
 ```
 
-### Output
-```go
-type Output struct {
-	Data    map[string]any // For unary/client streaming
-	Stream  []any          // For server streaming
-	Error   string
-	Code    *codes.Code
-	Delay   time.Duration
-}
-```
+## Performance Notes
 
-## Tips
-
-- Use **V2 API** for new projects
-- Use **Input** for unary/server streaming, **Stream** for client/bidirectional
-- Set **priorities** for stub ordering
-- Use **Equals**, **Contains**, **Matches** for flexible matching
+- **V2 (New)**: Use for best performance in most cases
+- **Parallel processing**: Only beneficial for 200+ stubs
+- **Memory**: V2 (New) significantly more memory efficient
+- **Allocations**: V2 (New) reduces allocations by 74-95%
 
 ## License
 
-MIT
+MIT License
