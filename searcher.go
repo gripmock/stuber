@@ -14,6 +14,18 @@ import (
 	"github.com/google/uuid"
 )
 
+// PriorityMultiplier is used to boost stub priority in ranking calculations.
+// Higher values give more weight to explicit priority settings.
+const PriorityMultiplier = 10.0
+
+// Specificity calculation constants
+const (
+	// EmptySpecificity is returned when no fields match
+	EmptySpecificity = 0
+	// MinStreamLength is the minimum length for stream calculations
+	MinStreamLength = 0
+)
+
 // ErrServiceNotFound is returned when the service is not found.
 var ErrServiceNotFound = errors.New("service not found")
 
@@ -22,9 +34,6 @@ var ErrMethodNotFound = errors.New("method not found")
 
 // ErrStubNotFound is returned when the stub is not found.
 var ErrStubNotFound = errors.New("stub not found")
-
-// PriorityMultiplier is used to boost priority in ranking calculations.
-const PriorityMultiplier = 10000
 
 // searcher is a struct that manages the storage of search results.
 //
@@ -923,6 +932,7 @@ func (s *searcher) processStubs(query QueryV2, stubs []*Stub) (*Result, error) {
 	// Multiple stubs - use ultra-optimized processing
 	var found *Stub
 	var foundRank float64
+	var foundSpecificity int
 	var similar *Stub
 	var similarRank float64
 
@@ -930,12 +940,17 @@ func (s *searcher) processStubs(query QueryV2, stubs []*Stub) (*Result, error) {
 		// Ultra-fast ranking with minimal allocations
 		rank := s.fastRankV2(query, stub)
 		priorityBonus := float64(stub.Priority) * PriorityMultiplier
+
+		// Calculate specificity (number of matched fields) - universal approach
+		specificity := s.calcSpecificity(stub, query)
+
 		totalRank := rank + priorityBonus
 
 		// Ultra-fast matching
 		if s.fastMatchV2(query, stub) {
-			if totalRank > foundRank {
-				found, foundRank = stub, totalRank
+			// Choose stub with higher specificity first, then by rank
+			if specificity > foundSpecificity || (specificity == foundSpecificity && totalRank > foundRank) {
+				found, foundRank, foundSpecificity = stub, totalRank, specificity
 			}
 		} else if totalRank > similarRank {
 			similar, similarRank = stub, totalRank
@@ -963,6 +978,11 @@ func (s *searcher) fastMatchV2(query QueryV2, stub *Stub) bool {
 		}
 	}
 
+	// Empty input case - no match
+	if len(query.Input) == 0 {
+		return false
+	}
+
 	// Fast path: unary case (most common)
 	if len(stub.Stream) == 0 && len(query.Input) == 1 {
 		return s.fastMatchInput(query.Input[0], stub.Input)
@@ -973,6 +993,7 @@ func (s *searcher) fastMatchV2(query QueryV2, stub *Stub) bool {
 		return s.fastMatchStream(query.Input, stub.Stream)
 	}
 
+	// Multiple stream items but no stream in stub - no match (original behavior)
 	return false
 }
 
@@ -985,6 +1006,11 @@ func (s *searcher) fastRankV2(query QueryV2, stub *Stub) float64 {
 		}
 	}
 
+	// Empty input case - no rank
+	if len(query.Input) == 0 {
+		return 0
+	}
+
 	// Fast path: unary case (most common)
 	if len(stub.Stream) == 0 && len(query.Input) == 1 {
 		return s.fastRankInput(query.Input[0], stub.Input)
@@ -995,6 +1021,7 @@ func (s *searcher) fastRankV2(query QueryV2, stub *Stub) float64 {
 		return s.fastRankStream(query.Input, stub.Stream)
 	}
 
+	// Multiple stream items but no stream in stub - no rank (original behavior)
 	return 0
 }
 
@@ -1131,4 +1158,109 @@ func (s *searcher) wrap(err error) error {
 	}
 
 	return err
+}
+
+// calcSpecificity calculates the specificity score for a stub against a query.
+// Higher specificity means more fields match between stub and query.
+// This function is universal and handles all cases:
+// - Unary requests (single input)
+// - Stream requests (multiple inputs with stream stubs)
+// - Empty inputs (no match)
+// - Multiple inputs without stream stubs (no match, original behavior)
+//
+// Parameters:
+// - stub: The stub to calculate specificity for
+// - query: The query to match against
+//
+// Returns:
+// - int: The specificity score (higher = more specific match)
+func (s *searcher) calcSpecificity(stub *Stub, query QueryV2) int {
+	// Empty input case - no specificity
+	if len(query.Input) == 0 {
+		return 0
+	}
+
+	// For unary case (most common)
+	if len(stub.Stream) == 0 && len(query.Input) == 1 {
+		return s.calcSpecificityUnary(stub.Input, query.Input[0])
+	}
+
+	// For stream case
+	if len(stub.Stream) > 0 {
+		return s.calcSpecificityStream(stub.Stream, query.Input)
+	}
+
+	// For multiple inputs but no stream stub - return 0 (original behavior)
+	return 0
+}
+
+// calcSpecificityUnary calculates specificity for unary case.
+// Counts the number of fields that exist in both stub and query.
+// Supports all field types: Equals, Contains, and Matches.
+//
+// Parameters:
+// - stubInput: The stub's input data
+// - queryData: The query's input data
+//
+// Returns:
+// - int: The number of matching fields
+func (s *searcher) calcSpecificityUnary(stubInput InputData, queryData map[string]any) int {
+	specificity := 0
+
+	// Helper function to count matching fields
+	countMatchingFields := func(stubFields map[string]any) int {
+		count := 0
+		for key := range stubFields {
+			if _, exists := queryData[key]; exists {
+				count++
+			}
+		}
+		return count
+	}
+
+	// Count equals fields
+	if len(stubInput.Equals) > 0 {
+		specificity += countMatchingFields(stubInput.Equals)
+	}
+
+	// Count contains fields
+	if len(stubInput.Contains) > 0 {
+		specificity += countMatchingFields(stubInput.Contains)
+	}
+
+	// Count matches fields
+	if len(stubInput.Matches) > 0 {
+		specificity += countMatchingFields(stubInput.Matches)
+	}
+
+	return specificity
+}
+
+// calcSpecificityStream calculates specificity for stream case.
+// Calculates the total specificity across all stream elements.
+// Uses the minimum length of stub and query streams to avoid index out of bounds.
+//
+// Parameters:
+// - stubStream: The stub's stream data
+// - queryStream: The query's stream data
+//
+// Returns:
+// - int: The total specificity across all stream elements
+func (s *searcher) calcSpecificityStream(stubStream []InputData, queryStream []map[string]any) int {
+	if len(stubStream) == 0 || len(queryStream) == 0 {
+		return 0
+	}
+
+	// For stream, calculate total specificity across all elements
+	totalSpecificity := 0
+	minLen := len(stubStream)
+	if len(queryStream) < minLen {
+		minLen = len(queryStream)
+	}
+
+	for i := 0; i < minLen; i++ {
+		totalSpecificity += s.calcSpecificityUnary(stubStream[i], queryStream[i])
+	}
+
+	return totalSpecificity
 }
