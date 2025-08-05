@@ -575,7 +575,7 @@ func TestStuber_EqualsIgnoreArrayOrder(t *testing.T) {
 		},
 	)
 
-	// Порядок элементов в запросе другой
+	// The order of elements in the query is different
 	query := stuber.Query{
 		Service: "IdentifierService",
 		Method:  "ProcessUUIDs",

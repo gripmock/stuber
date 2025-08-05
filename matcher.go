@@ -116,37 +116,38 @@ func equals(expected map[string]any, actual any, orderIgnore bool) bool {
 		return false
 	}
 
+	// Fast path: single field
 	if len(expected) == 1 {
 		for key, expectedValue := range expected {
 			actualValue, exists := actualMap[key]
 			if !exists {
 				return false
 			}
-			// Исправление: если orderIgnore и оба значения — слайсы, сравниваем через deeply
 			if orderIgnore {
-				eSlice, eOk := expectedValue.([]any)
-				aSlice, aOk := actualValue.([]any)
-				if eOk && aOk {
-					return deeply.EqualsIgnoreArrayOrder(eSlice, aSlice)
+				if eSlice, eOk := expectedValue.([]any); eOk {
+					if aSlice, aOk := actualValue.([]any); aOk {
+						return deeply.EqualsIgnoreArrayOrder(eSlice, aSlice)
+					}
 				}
 			}
 			return ultraFastSpecializedEquals(expectedValue, actualValue)
 		}
 	}
 
+	// General case: check all fields
 	for key, expectedValue := range expected {
 		actualValue, exists := actualMap[key]
 		if !exists {
 			return false
 		}
 		if orderIgnore {
-			eSlice, eOk := expectedValue.([]any)
-			aSlice, aOk := actualValue.([]any)
-			if eOk && aOk {
-				if !deeply.EqualsIgnoreArrayOrder(eSlice, aSlice) {
-					return false
+			if eSlice, eOk := expectedValue.([]any); eOk {
+				if aSlice, aOk := actualValue.([]any); aOk {
+					if !deeply.EqualsIgnoreArrayOrder(eSlice, aSlice) {
+						return false
+					}
+					continue
 				}
-				continue
 			}
 		}
 		if !ultraFastSpecializedEquals(expectedValue, actualValue) {
