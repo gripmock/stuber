@@ -56,11 +56,11 @@ package main
 
 import (
     "github.com/gripmock/stuber"
-    "github.com/gripmock/stuber/features"
+    "github.com/bavix/features"
 )
 
 func main() {
-    toggles := features.NewToggles()
+    toggles := features.New()
     stuber := stuber.NewBudgerigar(toggles)
     
     stub := &stuber.Stub{
