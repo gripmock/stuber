@@ -73,7 +73,7 @@ func TestMatchStreamV2(t *testing.T) {
 			stub := &stuber.Stub{
 				Service: "test",
 				Method:  "test",
-				Stream:  tt.stubStream,
+				Inputs:  tt.stubStream,
 			}
 
 			budgerigar := stuber.NewBudgerigar(features.New())
@@ -112,7 +112,7 @@ func TestMatchWithStreamV2(t *testing.T) {
 	stub := &stuber.Stub{
 		Service: "test",
 		Method:  "test",
-		Stream: []stuber.InputData{
+		Inputs: []stuber.InputData{
 			{Equals: map[string]any{"stream1": "value1"}},
 			{Equals: map[string]any{"stream2": "value2"}},
 		},
@@ -221,7 +221,7 @@ func TestV2StreamRequest(t *testing.T) {
 	stub := &stuber.Stub{
 		Service: "test",
 		Method:  "test",
-		Stream: []stuber.InputData{
+		Inputs: []stuber.InputData{
 			{Equals: map[string]any{"stream1": "value1"}},
 			{Equals: map[string]any{"stream2": "value2"}},
 		},

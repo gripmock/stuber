@@ -212,7 +212,7 @@ func BenchmarkV1vsV2_Stream(b *testing.B) {
 			ID:      uuid.New(),
 			Service: "test-service",
 			Method:  "test-method",
-			Stream: []stuber.InputData{
+			Inputs: []stuber.InputData{
 				{Equals: map[string]any{"stream1": "value1"}},
 				{Equals: map[string]any{"stream2": "value2"}},
 			},
@@ -241,7 +241,7 @@ func BenchmarkV1vsV2_Stream(b *testing.B) {
 			ID:      uuid.New(),
 			Service: "test-service",
 			Method:  "test-method",
-			Stream: []stuber.InputData{
+			Inputs: []stuber.InputData{
 				{Equals: map[string]any{"stream1": "value1"}},
 				{Equals: map[string]any{"stream2": "value2"}},
 			},

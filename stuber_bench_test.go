@@ -251,7 +251,7 @@ func BenchmarkFindByQueryStream(b *testing.B) {
 			ID:      uuid.New(),
 			Service: "service-" + uuid.NewString(),
 			Method:  "method-" + uuid.NewString(),
-			Stream: []stuber.InputData{
+			Inputs: []stuber.InputData{
 				{Equals: map[string]any{"stream1": "value1"}},
 				{Equals: map[string]any{"stream2": "value2"}},
 			},
@@ -313,7 +313,7 @@ func BenchmarkMatchStream(b *testing.B) {
 	stub := &stuber.Stub{
 		Service: "test",
 		Method:  "test",
-		Stream: []stuber.InputData{
+		Inputs: []stuber.InputData{
 			{Equals: map[string]any{"key1": "value1"}},
 			{Equals: map[string]any{"key2": "value2"}},
 		},
@@ -345,7 +345,7 @@ func BenchmarkRankMatchStream(b *testing.B) {
 			ID:      uuid.New(),
 			Service: "test",
 			Method:  "test",
-			Stream: []stuber.InputData{
+			Inputs: []stuber.InputData{
 				{Equals: map[string]any{"key1": "value1"}},
 				{Equals: map[string]any{"key2": "value2"}},
 			},
@@ -403,7 +403,7 @@ func BenchmarkQueryV2Stream(b *testing.B) {
 	stub := &stuber.Stub{
 		Service: "test",
 		Method:  "test",
-		Stream: []stuber.InputData{
+		Inputs: []stuber.InputData{
 			{Equals: map[string]any{"stream1": "value1"}},
 			{Equals: map[string]any{"stream2": "value2"}},
 		},
@@ -472,7 +472,7 @@ func BenchmarkBidiStreaming(b *testing.B) {
 		Service:  "ChatService",
 		Method:   "Chat",
 		Priority: 1,
-		Stream: []stuber.InputData{
+		Inputs: []stuber.InputData{
 			{Equals: map[string]any{"message": "hello"}},
 			{Equals: map[string]any{"message": "world"}},
 			{Equals: map[string]any{"message": "goodbye"}},
@@ -487,7 +487,7 @@ func BenchmarkBidiStreaming(b *testing.B) {
 		Service:  "ChatService",
 		Method:   "Chat",
 		Priority: 2,
-		Stream: []stuber.InputData{
+		Inputs: []stuber.InputData{
 			{Equals: map[string]any{"message": "hello"}},
 			{Equals: map[string]any{"message": "universe"}},
 			{Equals: map[string]any{"message": "farewell"}},

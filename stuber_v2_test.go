@@ -681,7 +681,7 @@ func TestBidiStreaming(t *testing.T) {
 		Headers: stuber.InputHeader{
 			Equals: map[string]any{"content-type": "application/json"},
 		},
-		Stream: []stuber.InputData{
+		Inputs: []stuber.InputData{
 			{Equals: map[string]any{"message": "hello"}},
 		},
 		Output: stuber.Output{
@@ -700,7 +700,7 @@ func TestBidiStreaming(t *testing.T) {
 		Headers: stuber.InputHeader{
 			Equals: map[string]any{"content-type": "application/json"},
 		},
-		Stream: []stuber.InputData{
+		Inputs: []stuber.InputData{
 			{Equals: map[string]any{"message": "how are you"}},
 		},
 		Output: stuber.Output{
@@ -715,7 +715,7 @@ func TestBidiStreaming(t *testing.T) {
 		Headers: stuber.InputHeader{
 			Equals: map[string]any{"content-type": "application/json"},
 		},
-		Stream: []stuber.InputData{
+		Inputs: []stuber.InputData{
 			{Equals: map[string]any{"message": "goodbye"}},
 		},
 		Output: stuber.Output{
@@ -896,7 +896,7 @@ func TestBidiStreamingStatefulLogic(t *testing.T) {
 		Headers: stuber.InputHeader{
 			Equals: map[string]any{"content-type": "application/json"},
 		},
-		Stream: []stuber.InputData{
+		Inputs: []stuber.InputData{
 			{Equals: map[string]any{"message": "hello"}},
 			{Equals: map[string]any{"message": "world"}},
 			{Equals: map[string]any{"message": "goodbye"}},
@@ -913,7 +913,7 @@ func TestBidiStreamingStatefulLogic(t *testing.T) {
 		Headers: stuber.InputHeader{
 			Equals: map[string]any{"content-type": "application/json"},
 		},
-		Stream: []stuber.InputData{
+		Inputs: []stuber.InputData{
 			{Equals: map[string]any{"message": "hello"}},
 			{Equals: map[string]any{"message": "universe"}},
 			{Equals: map[string]any{"message": "farewell"}},
@@ -930,7 +930,7 @@ func TestBidiStreamingStatefulLogic(t *testing.T) {
 		Headers: stuber.InputHeader{
 			Equals: map[string]any{"content-type": "application/json"},
 		},
-		Stream: []stuber.InputData{
+		Inputs: []stuber.InputData{
 			{Equals: map[string]any{"message": "hello"}},
 			{Equals: map[string]any{"message": "galaxy"}},
 			{Equals: map[string]any{"message": "adios"}},
@@ -985,7 +985,7 @@ func TestBidiStreamingStatefulLogicDifferentPattern(t *testing.T) {
 		Headers: stuber.InputHeader{
 			Equals: map[string]any{"content-type": "application/json"},
 		},
-		Stream: []stuber.InputData{
+		Inputs: []stuber.InputData{
 			{Equals: map[string]any{"message": "hello"}},
 			{Equals: map[string]any{"message": "world"}},
 		},
@@ -1001,7 +1001,7 @@ func TestBidiStreamingStatefulLogicDifferentPattern(t *testing.T) {
 		Headers: stuber.InputHeader{
 			Equals: map[string]any{"content-type": "application/json"},
 		},
-		Stream: []stuber.InputData{
+		Inputs: []stuber.InputData{
 			{Equals: map[string]any{"message": "hello"}},
 			{Equals: map[string]any{"message": "universe"}},
 		},
@@ -1046,7 +1046,7 @@ func TestBidiStreamingStatefulLogicNoMatch(t *testing.T) {
 		Headers: stuber.InputHeader{
 			Equals: map[string]any{"content-type": "application/json"},
 		},
-		Stream: []stuber.InputData{
+		Inputs: []stuber.InputData{
 			{Equals: map[string]any{"message": "hello"}},
 			{Equals: map[string]any{"message": "world"}},
 		},

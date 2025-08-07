@@ -209,10 +209,10 @@ func (br *BidiResult) Next(messageData map[string]any) (*Stub, error) {
 		// For bidirectional streaming, rank based on the specific message index
 		var rank float64
 
-		if stub.IsBidirectional() && len(stub.Stream) > 0 {
+		if stub.IsBidirectional() && len(stub.Inputs) > 0 {
 			// Check if we have a stream element for this message index
-			if messageIndex < len(stub.Stream) {
-				streamElement := stub.Stream[messageIndex]
+			if messageIndex < len(stub.Inputs) {
+				streamElement := stub.Inputs[messageIndex]
 				rank = br.rankInputData(streamElement, messageData)
 			} else {
 				// Message index out of bounds - very low rank
@@ -275,9 +275,9 @@ func (br *BidiResult) GetMessageIndex() int {
 func (br *BidiResult) stubMatchesMessage(stub *Stub, messageData map[string]any) bool {
 	// For bidirectional streaming stubs, check if message matches any stream element
 	if stub.IsBidirectional() {
-		// New format: use Stream for input matching
-		if len(stub.Stream) > 0 {
-			for _, streamElement := range stub.Stream {
+		// New format: use Inputs for input matching
+		if len(stub.Inputs) > 0 {
+			for _, streamElement := range stub.Inputs {
 				if br.matchInputData(streamElement, messageData) {
 					return true
 				}
@@ -291,7 +291,7 @@ func (br *BidiResult) stubMatchesMessage(stub *Stub, messageData map[string]any)
 
 	// For client streaming stubs, check if message matches any stream element
 	if stub.IsClientStream() {
-		for _, streamElement := range stub.Stream {
+		for _, streamElement := range stub.Inputs {
 			if br.matchInputData(streamElement, messageData) {
 				return true
 			}
@@ -1117,12 +1117,12 @@ func (s *searcher) fastMatchV2(query QueryV2, stub *Stub) bool {
 		return false
 	}
 
-	if len(stub.Stream) == 0 && len(query.Input) == 1 {
+	if len(stub.Inputs) == 0 && len(query.Input) == 1 {
 		return s.fastMatchInput(query.Input[0], stub.Input)
 	}
 
-	if len(stub.Stream) > 0 {
-		return s.fastMatchStream(query.Input, stub.Stream)
+	if len(stub.Inputs) > 0 {
+		return s.fastMatchStream(query.Input, stub.Inputs)
 	}
 
 	return false
@@ -1138,12 +1138,12 @@ func (s *searcher) fastRankV2(query QueryV2, stub *Stub) float64 {
 		return 0
 	}
 
-	if len(stub.Stream) == 0 && len(query.Input) == 1 {
+	if len(stub.Inputs) == 0 && len(query.Input) == 1 {
 		return s.fastRankInput(query.Input[0], stub.Input)
 	}
 
-	if len(stub.Stream) > 0 {
-		return s.fastRankStream(query.Input, stub.Stream)
+	if len(stub.Inputs) > 0 {
+		return s.fastRankStream(query.Input, stub.Inputs)
 	}
 
 	return 0
@@ -1294,12 +1294,12 @@ func (s *searcher) calcSpecificity(stub *Stub, query QueryV2) int {
 		return 0
 	}
 
-	if len(stub.Stream) == 0 && len(query.Input) == 1 {
+	if len(stub.Inputs) == 0 && len(query.Input) == 1 {
 		return s.calcSpecificityUnary(stub.Input, query.Input[0])
 	}
 
-	if len(stub.Stream) > 0 {
-		return s.calcSpecificityStream(stub.Stream, query.Input)
+	if len(stub.Inputs) > 0 {
+		return s.calcSpecificityStream(stub.Inputs, query.Input)
 	}
 
 	return 0

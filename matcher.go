@@ -278,13 +278,13 @@ func matches(expected map[string]any, actual any, _ bool) bool {
 // Optimized version with minimal allocations and checks.
 func rankMatchV2(query QueryV2, stub *Stub) float64 {
 	// Fast path: unary case (most common case)
-	if len(stub.Stream) == 0 && len(query.Input) == 1 {
+	if len(stub.Inputs) == 0 && len(query.Input) == 1 {
 		return rankHeaders(query.Headers, stub.Headers) + rankInput(query.Input[0], stub.Input)
 	}
 
 	// Stream case
-	if len(stub.Stream) > 0 {
-		return rankHeaders(query.Headers, stub.Headers) + rankStreamElements(query.Input, stub.Stream)
+	if len(stub.Inputs) > 0 {
+		return rankHeaders(query.Headers, stub.Headers) + rankStreamElements(query.Input, stub.Inputs)
 	}
 
 	// Multiple stream items but no stream in stub - no rank
