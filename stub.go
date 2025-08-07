@@ -21,7 +21,7 @@ type Stub struct {
 
 // IsUnary returns true if this stub is for unary requests (has Input data).
 func (s *Stub) IsUnary() bool {
-	return len(s.Input.Equals) > 0 || len(s.Input.Contains) > 0 || len(s.Input.Matches) > 0
+	return len(s.Inputs) == 0
 }
 
 // IsClientStream returns true if this stub is for client streaming requests (has Inputs data).
