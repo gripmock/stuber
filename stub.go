@@ -9,24 +9,24 @@ import (
 
 // Stub represents a gRPC service method and its associated data.
 type Stub struct {
-	ID       uuid.UUID   `json:"id"`       // The unique identifier of the stub.
-	Service  string      `json:"service"`  // The name of the service.
-	Method   string      `json:"method"`   // The name of the method.
-	Priority int         `json:"priority"` // The priority score of the stub.
-	Headers  InputHeader `json:"headers"`  // The headers of the request.
-	Input    InputData   `json:"input"`    // The input data for unary requests (mutually exclusive with Stream).
-	Stream   []InputData `json:"stream"`   // The stream data for client streaming requests (mutually exclusive with Input).
-	Output   Output      `json:"output"`   // The output data of the response.
+	ID       uuid.UUID   `json:"id"`               // The unique identifier of the stub.
+	Service  string      `json:"service"`          // The name of the service.
+	Method   string      `json:"method"`           // The name of the method.
+	Priority int         `json:"priority"`         // The priority score of the stub.
+	Headers  InputHeader `json:"headers"`          // The headers of the request.
+	Input    InputData   `json:"input"`            // The input data for unary requests (mutually exclusive with Inputs).
+	Inputs   []InputData `json:"inputs,omitempty"` // The inputs data for client streaming requests (mutually exclusive with Input).
+	Output   Output      `json:"output"`           // The output data of the response.
 }
 
 // IsUnary returns true if this stub is for unary requests (has Input data).
 func (s *Stub) IsUnary() bool {
-	return len(s.Input.Equals) > 0 || len(s.Input.Contains) > 0 || len(s.Input.Matches) > 0
+	return len(s.Inputs) == 0
 }
 
-// IsClientStream returns true if this stub is for client streaming requests (has Stream data).
+// IsClientStream returns true if this stub is for client streaming requests (has Inputs data).
 func (s *Stub) IsClientStream() bool {
-	return len(s.Stream) > 0
+	return len(s.Inputs) > 0
 }
 
 // IsServerStream returns true if this stub is for server streaming responses (has Output.Stream data).
@@ -35,7 +35,7 @@ func (s *Stub) IsServerStream() bool {
 }
 
 // IsBidirectional returns true if this stub can handle bidirectional streaming.
-// For bidirectional streaming, the stub should have Stream data (for input matching) and Output.Stream data (for output).
+// For bidirectional streaming, the stub should have Inputs data (for input matching) and Output.Stream data (for output).
 func (s *Stub) IsBidirectional() bool {
 	return s.IsClientStream() && s.IsServerStream()
 }

@@ -369,7 +369,7 @@ func TestSearch_Specificity_StreamCase(t *testing.T) {
 		ID:      uuid.New(),
 		Service: "TestService",
 		Method:  "StreamMethod",
-		Stream: []InputData{
+		Inputs: []InputData{
 			{
 				Equals: map[string]any{
 					"field1": "value1",
@@ -390,7 +390,7 @@ func TestSearch_Specificity_StreamCase(t *testing.T) {
 		ID:      uuid.New(),
 		Service: "TestService",
 		Method:  "StreamMethod",
-		Stream: []InputData{
+		Inputs: []InputData{
 			{
 				Equals: map[string]any{
 					"field1": "value1",
