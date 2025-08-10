@@ -748,35 +748,49 @@ func TestBidiStreaming(t *testing.T) {
 func TestBidiStreamingFallback(t *testing.T) {
 	s := stuber.NewBudgerigar(features.New())
 
-	// Add a stub for the same service but different method to ensure the service exists
-	otherStub := &stuber.Stub{
+	s.PutMany(&stuber.Stub{
 		ID:      uuid.New(),
 		Service: "ChatService",
 		Method:  "Chat",
 		Input: stuber.InputData{
-			Equals: map[string]any{"message": "other"},
+			Equals: map[string]any{"user": "Charlie", "text": "Hi everyone!"},
 		},
 		Output: stuber.Output{
-			Data: map[string]any{"response": "other"},
+			Data: map[string]any{"user": "Bot", "text": "Hello Charlie!"},
 		},
-	}
-	s.PutMany(otherStub)
+	})
+
+	s.PutMany(&stuber.Stub{
+		ID:      uuid.New(),
+		Service: "ChatService",
+		Method:  "Chat",
+		Input: stuber.InputData{
+			Equals: map[string]any{"user": "Charlie", "text": "Anyone there?"},
+		},
+		Output: stuber.Output{
+			Data: map[string]any{"user": "Bot", "text": "We're here!"},
+		},
+	})
 
 	// Query for the same service and method
 	query := stuber.QueryBidi{
 		Service: "ChatService",
 		Method:  "Chat",
-		Headers: map[string]any{"content-type": "application/json"},
 	}
 
 	result, err := s.FindByQueryBidi(query)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
-	// Test message that doesn't match any stub
-	_, err = result.Next(map[string]any{"message": "hello"})
-	require.Error(t, err)
-	require.ErrorIs(t, err, stuber.ErrStubNotFound)
+	stub, err := result.Next(map[string]any{"user": "Charlie", "text": "Hi everyone!"})
+	require.NoError(t, err)
+	require.NotNil(t, stub)
+	require.Equal(t, "Hello Charlie!", stub.Output.Data["text"])
+
+	stub, err = result.Next(map[string]any{"user": "Charlie", "text": "Anyone there?"})
+	require.NoError(t, err)
+	require.NotNil(t, stub)
+	require.Equal(t, "We're here!", stub.Output.Data["text"])
 }
 
 // TestBidiStreamingWithID tests bidirectional streaming with ID-based queries.

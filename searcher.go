@@ -123,9 +123,7 @@ func (r *Result) Similar() *Stub {
 // For bidirectional streaming, we maintain a list of matching stubs and filter them as messages arrive.
 type BidiResult struct {
 	searcher      *searcher
-	service       string
-	method        string
-	headers       map[string]any
+	query         QueryBidi
 	matchingStubs []*Stub      // Stubs that match the current message pattern
 	messageCount  atomic.Int32 // Number of messages processed so far
 	mu            sync.RWMutex // Thread safety for concurrent access
@@ -143,30 +141,12 @@ func (br *BidiResult) Next(messageData map[string]any) (*Stub, error) {
 		return nil, ErrStubNotFound
 	}
 
-	// Validate service and method
-	if br.service == "" || br.method == "" {
-		return nil, ErrStubNotFound
-	}
-
-	// Validate headers
-	if br.headers == nil {
-		br.headers = make(map[string]any)
-	}
-
 	// If this is the first call, initialize matching stubs
-	//nolint:nestif
 	if len(br.matchingStubs) == 0 {
 		// Get all stubs for this service/method
-		seq, err := br.searcher.storage.findAll(br.service, br.method)
+		allStubs, err := br.searcher.findBy(br.query.Service, br.query.Method)
 		if err != nil {
 			return nil, ErrStubNotFound
-		}
-
-		var allStubs []*Stub
-		for v := range seq {
-			if stub, ok := v.(*Stub); ok {
-				allStubs = append(allStubs, stub)
-			}
 		}
 
 		// Find stubs that match the first message
@@ -175,8 +155,6 @@ func (br *BidiResult) Next(messageData map[string]any) (*Stub, error) {
 				br.matchingStubs = append(br.matchingStubs, stub)
 			}
 		}
-
-		br.messageCount.Store(0)
 	} else {
 		// Filter existing matching stubs - remove those that don't match the new message
 		var filteredStubs []*Stub
@@ -221,10 +199,12 @@ func (br *BidiResult) Next(messageData map[string]any) (*Stub, error) {
 		} else {
 			// For other types, use the old ranking method
 			query := QueryV2{
-				Service: br.service,
-				Method:  br.method,
-				Headers: br.headers,
+				Service: br.query.Service,
+				Method:  br.query.Method,
+				Headers: br.query.Headers,
 				Input:   []map[string]any{messageData},
+
+				toggles: br.query.toggles,
 			}
 			rank = br.rankStub(stub, query)
 		}
@@ -252,11 +232,23 @@ func (br *BidiResult) Next(messageData map[string]any) (*Stub, error) {
 	if bestStub != nil {
 		// Mark the stub as used
 		query := QueryV2{
-			Service: br.service,
-			Method:  br.method,
-			Headers: br.headers,
+			Service: br.query.Service,
+			Method:  br.query.Method,
+			Headers: br.query.Headers,
 			Input:   []map[string]any{messageData},
+
+			toggles: br.query.toggles,
 		}
+
+		// For non-client streaming RPCs, reset the matching stubs and message count after the first message.
+		// This fallback ensures that for unary or server-streaming calls, the stub selection is reset,
+		// allowing subsequent requests to match the correct stub from the beginning.
+		// This logic is only triggered when the best stub is not a client stream and this is the first message.
+		if !bestStub.IsClientStream() && br.messageCount.Load() == 0 {
+			br.matchingStubs = br.matchingStubs[:0]
+			br.messageCount.Store(0)
+		}
+
 		br.searcher.markV2(query, bestStub.ID)
 
 		return bestStub, nil
@@ -860,9 +852,7 @@ func (s *searcher) findBidi(query QueryBidi) (*BidiResult, error) {
 
 	return &BidiResult{
 		searcher:      s,
-		service:       query.Service,
-		method:        query.Method,
-		headers:       query.Headers,
+		query:         query,
 		matchingStubs: make([]*Stub, 0),
 	}, nil
 }
@@ -880,9 +870,7 @@ func (s *searcher) searchByIDBidi(query QueryBidi) (*BidiResult, error) {
 	if found := s.findByID(*query.ID); found != nil {
 		return &BidiResult{
 			searcher:      s,
-			service:       query.Service,
-			method:        query.Method,
-			headers:       query.Headers,
+			query:         query,
 			matchingStubs: []*Stub{found},
 		}, nil
 	}
@@ -1220,7 +1208,11 @@ func (s *searcher) fastRankStream(queryStream []map[string]any, stubStream []Inp
 }
 
 // markV2 marks the given Stub value as used in the searcher.
-func (s *searcher) markV2(_ QueryV2, id uuid.UUID) {
+func (s *searcher) markV2(query QueryV2, id uuid.UUID) {
+	if query.RequestInternal() {
+		return
+	}
+
 	// Mark stub as used
 	s.mu.Lock()
 	defer s.mu.Unlock()
