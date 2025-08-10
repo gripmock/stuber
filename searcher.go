@@ -142,7 +142,6 @@ func (br *BidiResult) Next(messageData map[string]any) (*Stub, error) {
 	}
 
 	// If this is the first call, initialize matching stubs
-	//nolint:nestif
 	if len(br.matchingStubs) == 0 {
 		// Get all stubs for this service/method
 		allStubs, err := br.searcher.findBy(br.query.Service, br.query.Method)

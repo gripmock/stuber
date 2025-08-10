@@ -782,18 +782,12 @@ func TestBidiStreamingFallback(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
-	t.Logf("result: %+v", result)
-
 	stub, err := result.Next(map[string]any{"user": "Charlie", "text": "Hi everyone!"})
 	require.NoError(t, err)
 	require.NotNil(t, stub)
 	require.Equal(t, "Hello Charlie!", stub.Output.Data["text"])
 
-	t.Logf("result: %+v", result)
-
 	stub, err = result.Next(map[string]any{"user": "Charlie", "text": "Anyone there?"})
-	t.Logf("result: %+v", result)
-
 	require.NoError(t, err)
 	require.NotNil(t, stub)
 	require.Equal(t, "We're here!", stub.Output.Data["text"])
