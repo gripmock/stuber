@@ -240,7 +240,10 @@ func (br *BidiResult) Next(messageData map[string]any) (*Stub, error) {
 			toggles: br.query.toggles,
 		}
 
-		// Fallback to the first stub if it's not a client stream
+		// For non-client streaming RPCs, reset the matching stubs and message count after the first message.
+		// This fallback ensures that for unary or server-streaming calls, the stub selection is reset,
+		// allowing subsequent requests to match the correct stub from the beginning.
+		// This logic is only triggered when the best stub is not a client stream and this is the first message.
 		if !bestStub.IsClientStream() && br.messageCount.Load() == 0 {
 			br.matchingStubs = br.matchingStubs[:0]
 			br.messageCount.Store(0)
