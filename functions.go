@@ -12,6 +12,8 @@ import (
 
 // TemplateFunctions provides all available template functions.
 // Optimized for performance with direct function references and minimal allocations.
+//
+//nolint:funlen,cyclop
 func TemplateFunctions() map[string]any {
 	return map[string]any{
 		// String operations - direct function references for maximum performance
@@ -24,6 +26,7 @@ func TemplateFunctions() map[string]any {
 		// JSON operations
 		"json": func(v any) string {
 			b, _ := json.Marshal(v)
+
 			return string(b)
 		},
 
@@ -43,18 +46,21 @@ func TemplateFunctions() map[string]any {
 			if f, ok := convertToFloat64(v); ok {
 				return int(f)
 			}
+
 			return 0
 		},
 		"int64": func(v any) int64 {
 			if f, ok := convertToFloat64(v); ok {
 				return int64(f)
 			}
+
 			return 0
 		},
 		"float": func(v any) float64 {
 			if f, ok := convertToFloat64(v); ok {
 				return f
 			}
+
 			return 0
 		},
 
@@ -63,18 +69,21 @@ func TemplateFunctions() map[string]any {
 			if f, ok := convertToFloat64(v); ok {
 				return math.Round(f)
 			}
+
 			return 0
 		},
 		"floor": func(v any) float64 {
 			if f, ok := convertToFloat64(v); ok {
 				return math.Floor(f)
 			}
+
 			return 0
 		},
 		"ceil": func(v any) float64 {
 			if f, ok := convertToFloat64(v); ok {
 				return math.Ceil(f)
 			}
+
 			return 0
 		},
 
@@ -85,6 +94,7 @@ func TemplateFunctions() map[string]any {
 				if math.Trunc(f) == f {
 					return json.Number(strconv.FormatFloat(f, 'f', 1, 64))
 				}
+
 				return json.Number(strconv.FormatFloat(f, 'g', -1, 64))
 			}
 
@@ -104,6 +114,7 @@ func TemplateFunctions() map[string]any {
 			if !okB {
 				return false
 			}
+
 			return va > vb
 		},
 
@@ -125,13 +136,15 @@ func TemplateFunctions() map[string]any {
 	}
 }
 
-// titleCase converts first character to uppercase (replaces deprecated strings.Title)
+// titleCase converts first character to uppercase (replaces deprecated strings.Title).
 func titleCase(s string) string {
 	if s == "" {
 		return s
 	}
+
 	r := []rune(s)
 	r[0] = unicode.ToUpper(r[0])
+
 	return string(r)
 }
 
@@ -143,36 +156,9 @@ func ensureDecimalStringFromFloat(value float64) string {
 	return s
 }
 
-// convertToJsonNumber converts any numeric value to json.Number.
-// Returns the converted value and true if conversion was successful.
-func convertToJsonNumber(v any) (json.Number, bool) {
-	switch val := v.(type) {
-	case int:
-		return json.Number(strconv.FormatInt(int64(val), 10)), true
-	case int32:
-		return json.Number(strconv.FormatInt(int64(val), 10)), true
-	case int64:
-		return json.Number(strconv.FormatInt(val, 10)), true
-	case uint:
-		return json.Number(strconv.FormatUint(uint64(val), 10)), true
-	case uint32:
-		return json.Number(strconv.FormatUint(uint64(val), 10)), true
-	case uint64:
-		return json.Number(strconv.FormatUint(val, 10)), true
-	case float32:
-		return json.Number(strconv.FormatFloat(float64(val), 'g', -1, 64)), true
-	case float64:
-		return json.Number(strconv.FormatFloat(val, 'g', -1, 64)), true
-	case string:
-		// Return as json.Number - validation will happen when converting to float64
-		return json.Number(val), true
-	case json.Number:
-		return val, true
-	}
-	return json.Number("0"), false
-}
-
 // convertToFloat64 converts any numeric value to float64 for calculations.
+//
+//nolint:cyclop
 func convertToFloat64(v any) (float64, bool) {
 	switch val := v.(type) {
 	case int:
@@ -200,6 +186,7 @@ func convertToFloat64(v any) (float64, bool) {
 			return f, true
 		}
 	}
+
 	return 0, false
 }
 
@@ -210,11 +197,14 @@ func binaryOperation(a, b any, operation func(float64, float64) float64) any {
 	if !okA {
 		return json.Number("0")
 	}
+
 	vb, okB := convertToFloat64(b)
 	if !okB {
 		return json.Number("0")
 	}
+
 	result := operation(va, vb)
+
 	return json.Number(ensureDecimalStringFromFloat(result))
 }
 
@@ -225,20 +215,19 @@ func binaryOperationWithZeroCheck(a, b any, operation func(float64, float64) flo
 	if !okA {
 		return json.Number("0")
 	}
+
 	vb, okB := convertToFloat64(b)
 	if !okB {
 		return json.Number("0")
 	}
+
 	if vb == 0 {
 		return json.Number("0")
 	}
-	result := operation(va, vb)
-	return json.Number(ensureDecimalStringFromFloat(result))
-}
 
-// multiply performs multiplication with type safety.
-func multiply(a, b any) any {
-	return binaryOperation(a, b, func(x, y float64) float64 { return x * y })
+	result := operation(va, vb)
+
+	return json.Number(ensureDecimalStringFromFloat(result))
 }
 
 // add performs addition with type safety.
@@ -261,7 +250,7 @@ func modulo(a, b any) any {
 	return binaryOperationWithZeroCheck(a, b, func(x, y float64) float64 { return x - float64(int(x/y))*y })
 }
 
-// sum calculates the sum of multiple values
+// sum calculates the sum of multiple values.
 func sum(values ...any) any {
 	if len(values) == 0 {
 		return json.Number("0")
@@ -275,16 +264,18 @@ func sum(values ...any) any {
 	}
 
 	var result float64
+
 	for _, v := range values {
 		if val, ok := convertToFloat64(v); ok {
 			result += val
 		}
 	}
+
 	return json.Number(ensureDecimalStringFromFloat(result))
 }
 
 // product calculates the product of multiple values
-// exposed to templates as "mul" to avoid ambiguity with domain terms
+// exposed to templates as "mul" to avoid ambiguity with domain terms.
 func product(values ...any) any {
 	if len(values) == 0 {
 		return json.Number("0")
@@ -298,15 +289,17 @@ func product(values ...any) any {
 	}
 
 	result := 1.0
+
 	for _, v := range values {
 		if val, ok := convertToFloat64(v); ok {
 			result *= val
 		}
 	}
+
 	return json.Number(ensureDecimalStringFromFloat(result))
 }
 
-// average calculates the average of multiple values
+// average calculates the average of multiple values.
 func average(values ...any) any {
 	if len(values) == 0 {
 		return json.Number("0")
@@ -319,18 +312,19 @@ func average(values ...any) any {
 		}
 	}
 
-	sum := sum(values...)
-	switch s := sum.(type) {
-	case json.Number:
+	sumVal := sum(values...)
+	if s, ok := sumVal.(json.Number); ok {
 		if f, err := s.Float64(); err == nil {
 			result := f / float64(len(values))
+
 			return json.Number(ensureDecimalStringFromFloat(result))
 		}
 	}
+
 	return json.Number("0")
 }
 
-// minValue finds the minimum value among multiple values
+// minValue finds the minimum value among multiple values.
 func minValue(values ...any) any {
 	if len(values) == 0 {
 		return json.Number("0")
@@ -343,21 +337,23 @@ func minValue(values ...any) any {
 		}
 	}
 
-	var min float64
+	var minValue float64
+
 	first := true
 
 	for _, v := range values {
 		if current, ok := convertToFloat64(v); ok {
-			if first || current < min {
-				min = current
+			if first || current < minValue {
+				minValue = current
 				first = false
 			}
 		}
 	}
-	return json.Number(ensureDecimalStringFromFloat(min))
+
+	return json.Number(ensureDecimalStringFromFloat(minValue))
 }
 
-// maxValue finds the maximum value among multiple values
+// maxValue finds the maximum value among multiple values.
 func maxValue(values ...any) any {
 	if len(values) == 0 {
 		return json.Number("0")
@@ -370,21 +366,23 @@ func maxValue(values ...any) any {
 		}
 	}
 
-	var max float64
+	var maxValue float64
+
 	first := true
 
 	for _, v := range values {
 		if current, ok := convertToFloat64(v); ok {
-			if first || current > max {
-				max = current
+			if first || current > maxValue {
+				maxValue = current
 				first = false
 			}
 		}
 	}
-	return json.Number(ensureDecimalStringFromFloat(max))
+
+	return json.Number(ensureDecimalStringFromFloat(maxValue))
 }
 
-// extract extracts a specific field from each message in a slice
+// extract extracts a specific field from each message in a slice.
 func extract(values []any, fieldName string) []any {
 	if len(values) == 0 {
 		return []any{}
@@ -392,12 +390,12 @@ func extract(values []any, fieldName string) []any {
 
 	result := make([]any, 0, len(values))
 	for _, v := range values {
-		switch val := v.(type) {
-		case map[string]any:
+		if val, ok := v.(map[string]any); ok {
 			if value, ok := val[fieldName]; ok {
 				result = append(result, value)
 			}
 		}
 	}
+
 	return result
 }

@@ -293,7 +293,7 @@ func rankMatchV2(query QueryV2, stub *Stub) float64 {
 
 // matchStreamElements checks if the query stream matches the stub stream.
 //
-//nolint:gocognit,cyclop,funlen
+//nolint:cyclop
 func matchStreamElements(queryStream []map[string]any, stubStream []InputData) bool {
 	// For client streaming, grpctestify sends an extra empty message at the end
 	// We need to handle this case by checking if the last message is empty

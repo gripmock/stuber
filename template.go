@@ -8,28 +8,29 @@ import (
 	"time"
 )
 
-// TemplateData represents the context data available for template rendering
+// TemplateData represents the context data available for template rendering.
 type TemplateData struct {
-	Request      map[string]any `json:"request"`       // The incoming request data
-	Headers      map[string]any `json:"headers"`       // The incoming request headers
-	MessageIndex int            `json:"message_index"` // Current message index (for streaming)
-	RequestTime  time.Time      `json:"request_time"`  // Atomic time for consistent timestamps
-	State        map[string]any `json:"state"`         // Request state for tracking calculations
-	Requests     []any          `json:"requests"`      // Array of all request messages (for streaming)
+	Request      map[string]any `json:"request"`
+	Headers      map[string]any `json:"headers"`
+	MessageIndex int            `json:"message_index"`
+	RequestTime  time.Time      `json:"request_time"`
+	State        map[string]any `json:"state"`
+	Requests     []any          `json:"requests"`
 }
 
-// createTemplate creates a template with custom functions
+// createTemplate creates a template with custom functions.
 func createTemplate() *template.Template {
 	return template.New("dynamic").Funcs(TemplateFunctions())
 }
 
-// RenderTemplate renders a template string with the given data
+// RenderTemplate renders a template string with the given data.
 func RenderTemplate(tmpl string, data TemplateData) (string, error) {
 	if tmpl == "" {
 		return "", nil
 	}
 
 	t := createTemplate()
+
 	parsed, err := t.Parse(tmpl)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse template: %w", err)
@@ -43,7 +44,7 @@ func RenderTemplate(tmpl string, data TemplateData) (string, error) {
 	return buf.String(), nil
 }
 
-// ProcessDynamicOutput processes the output data and applies dynamic templates
+// ProcessDynamicOutput processes the output data and applies dynamic templates.
 func (o *Output) ProcessDynamicOutput(requestData map[string]any, headers map[string]any, messageIndex int, allMessages []any) error {
 	// Create template data
 	templateData := TemplateData{
@@ -56,11 +57,13 @@ func (o *Output) ProcessDynamicOutput(requestData map[string]any, headers map[st
 	}
 
 	// Process all output fields
-	if err := processDataField(o.Data, templateData); err != nil {
+	err := processDataField(o.Data, templateData)
+	if err != nil {
 		return fmt.Errorf("failed to process data templates: %w", err)
 	}
 
-	if err := processStreamField(o.Stream, templateData); err != nil {
+	err = processStreamField(o.Stream, templateData)
+	if err != nil {
 		return fmt.Errorf("failed to process stream templates: %w", err)
 	}
 
@@ -70,7 +73,8 @@ func (o *Output) ProcessDynamicOutput(requestData map[string]any, headers map[st
 		o.Error = renderedError
 	}
 
-	if err := processHeadersField(o.Headers, templateData); err != nil {
+	err = processHeadersField(o.Headers, templateData)
+	if err != nil {
 		return fmt.Errorf("failed to process header templates: %w", err)
 	}
 
@@ -81,6 +85,7 @@ func processDataField(data map[string]any, templateData TemplateData) error {
 	if data == nil {
 		return nil
 	}
+
 	return processMapTemplates(data, templateData)
 }
 
@@ -91,12 +96,15 @@ func processStreamField(stream []any, templateData TemplateData) error {
 
 	for i, item := range stream {
 		if itemMap, ok := item.(map[string]any); ok {
-			if err := processMapTemplates(itemMap, templateData); err != nil {
+			err := processMapTemplates(itemMap, templateData)
+			if err != nil {
 				return fmt.Errorf("failed to process stream template at index %d: %w", i, err)
 			}
+
 			stream[i] = itemMap
 		}
 	}
+
 	return nil
 }
 
@@ -109,6 +117,7 @@ func processErrorField(errorStr string, templateData TemplateData) (string, erro
 	if err != nil {
 		return "", fmt.Errorf("failed to process error template: %w", err)
 	}
+
 	return rendered, nil
 }
 
@@ -123,13 +132,15 @@ func processHeadersField(headers map[string]string, templateData TemplateData) e
 			if err != nil {
 				return fmt.Errorf("failed to process header template for %s: %w", key, err)
 			}
+
 			headers[key] = rendered
 		}
 	}
+
 	return nil
 }
 
-// processMapTemplates recursively processes templates in a map
+// processMapTemplates recursively processes templates in a map.
 func processMapTemplates(data map[string]any, templateData TemplateData) error {
 	for key, value := range data {
 		switch v := value.(type) {
@@ -139,18 +150,22 @@ func processMapTemplates(data map[string]any, templateData TemplateData) error {
 				if err != nil {
 					return fmt.Errorf("failed to process template for key %s: %w", key, err)
 				}
+
 				data[key] = rendered
 			}
 		case map[string]any:
-			if err := processMapTemplates(v, templateData); err != nil {
+			err := processMapTemplates(v, templateData)
+			if err != nil {
 				return err
 			}
 		case []any:
-			if err := processArrayTemplates(v, templateData); err != nil {
+			err := processArrayTemplates(v, templateData)
+			if err != nil {
 				return err
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -158,9 +173,11 @@ func processArrayTemplates(arr []any, templateData TemplateData) error {
 	for i, item := range arr {
 		switch v := item.(type) {
 		case map[string]any:
-			if err := processMapTemplates(v, templateData); err != nil {
+			err := processMapTemplates(v, templateData)
+			if err != nil {
 				return err
 			}
+
 			arr[i] = v
 		case string:
 			if IsTemplateString(v) {
@@ -168,19 +185,21 @@ func processArrayTemplates(arr []any, templateData TemplateData) error {
 				if err != nil {
 					return fmt.Errorf("failed to process template for array item %d: %w", i, err)
 				}
+
 				arr[i] = rendered
 			}
 		}
 	}
+
 	return nil
 }
 
-// IsTemplateString checks if a string contains template syntax
+// IsTemplateString checks if a string contains template syntax.
 func IsTemplateString(s string) bool {
 	return strings.Contains(s, "{{") && strings.Contains(s, "}}")
 }
 
-// HasTemplates checks if the output contains any template strings
+// HasTemplates checks if the output contains any template strings.
 func (o *Output) HasTemplates() bool {
 	return (o.Data != nil && hasTemplatesInMap(o.Data)) ||
 		(o.Stream != nil && hasTemplatesInStream(o.Stream)) ||
@@ -194,6 +213,7 @@ func hasTemplatesInMap(data map[string]any) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -203,6 +223,7 @@ func hasTemplatesInStream(stream []any) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -212,6 +233,7 @@ func hasTemplatesInHeaders(headers map[string]string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -228,5 +250,6 @@ func hasTemplatesInValue(value any) bool {
 			}
 		}
 	}
+
 	return false
 }
