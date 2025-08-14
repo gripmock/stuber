@@ -372,12 +372,6 @@ func rankStreamElements(queryStream []map[string]any, stubStream []InputData) fl
 		return 0
 	}
 
-	// For client streaming, if lengths don't match, return very low rank
-	if effectiveQueryLength != len(stubStream) {
-		// For client streaming, length must match exactly
-		return 0.1 //nolint:mnd
-	}
-
 	// STRICT: If query stream is empty but stub expects data, no rank
 	if effectiveQueryLength == 0 && len(stubStream) > 0 {
 		return 0
