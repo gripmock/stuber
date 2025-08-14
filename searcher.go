@@ -156,6 +156,9 @@ func (br *BidiResult) Next(messageData map[string]any) (*Stub, error) {
 			}
 		}
 	} else {
+		// Advance message index first for current message processing
+		br.messageCount.Add(1)
+
 		// Filter existing matching stubs - remove those that don't match the new message
 		var filteredStubs []*Stub
 
@@ -166,7 +169,6 @@ func (br *BidiResult) Next(messageData map[string]any) (*Stub, error) {
 		}
 
 		br.matchingStubs = filteredStubs
-		br.messageCount.Add(1)
 	}
 
 	// If no matching stubs remain, return error
@@ -240,10 +242,8 @@ func (br *BidiResult) Next(messageData map[string]any) (*Stub, error) {
 			toggles: br.query.toggles,
 		}
 
-		// For non-client streaming RPCs, reset the matching stubs and message count after the first message.
-		// This fallback ensures that for unary or server-streaming calls, the stub selection is reset,
-		// allowing subsequent requests to match the correct stub from the beginning.
-		// This logic is only triggered when the best stub is not a client stream and this is the first message.
+		// For non-client streaming calls (unary or pure server-stream), reset state after the first message.
+		// Do NOT reset for client-streaming or bidirectional streaming, where message index must advance.
 		if !bestStub.IsClientStream() && br.messageCount.Load() == 0 {
 			br.matchingStubs = br.matchingStubs[:0]
 			br.messageCount.Store(0)
