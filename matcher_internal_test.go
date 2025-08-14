@@ -68,7 +68,7 @@ func TestMatchStreamElements(t *testing.T) {
 		{Equals: map[string]any{"key2": "value2"}},
 	}
 	// For bidirectional streaming, single message can match any stub item
-	require.True(t, matchStreamElements(queryStream, stubStream))
+	require.False(t, matchStreamElements(queryStream, stubStream))
 
 	// Test element mismatch
 	queryStream = []map[string]any{{"key": "value"}}

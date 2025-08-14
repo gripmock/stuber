@@ -8,6 +8,8 @@ linters:
     - varnamelen
     - wrapcheck
     - wsl
+    - tagliatelle
+    - noinlineerr
   settings:
     depguard:
       rules:

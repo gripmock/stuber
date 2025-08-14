@@ -293,7 +293,7 @@ func rankMatchV2(query QueryV2, stub *Stub) float64 {
 
 // matchStreamElements checks if the query stream matches the stub stream.
 //
-//nolint:gocognit,cyclop,funlen
+//nolint:cyclop
 func matchStreamElements(queryStream []map[string]any, stubStream []InputData) bool {
 	// For client streaming, grpctestify sends an extra empty message at the end
 	// We need to handle this case by checking if the last message is empty
@@ -305,35 +305,8 @@ func matchStreamElements(queryStream []map[string]any, stubStream []InputData) b
 		}
 	}
 
-	// For bidirectional streaming, we need to handle single messages
-	// If query has only one message, try to match it against any stub item
-	if effectiveQueryLength == 1 && len(stubStream) > 1 {
-		queryItem := queryStream[0]
-
-		// Try to match against any stub item
-		for _, stubItem := range stubStream {
-			// Check if this stub item has any matchers defined
-			hasMatchers := len(stubItem.Equals) > 0 || len(stubItem.Contains) > 0 || len(stubItem.Matches) > 0
-			if !hasMatchers {
-				continue
-			}
-
-			// Check equals matcher
-			if len(stubItem.Equals) > 0 && equals(stubItem.Equals, queryItem, stubItem.IgnoreArrayOrder) {
-				return true
-			}
-
-			// Check contains matcher
-			if len(stubItem.Contains) > 0 && contains(stubItem.Contains, queryItem, stubItem.IgnoreArrayOrder) {
-				return true
-			}
-
-			// Check matches matcher
-			if len(stubItem.Matches) > 0 && matches(stubItem.Matches, queryItem, stubItem.IgnoreArrayOrder) {
-				return true
-			}
-		}
-
+	// Enforce exact length match for client streaming to avoid out-of-range panics
+	if effectiveQueryLength != len(stubStream) {
 		return false
 	}
 
@@ -394,47 +367,9 @@ func rankStreamElements(queryStream []map[string]any, stubStream []InputData) fl
 		}
 	}
 
-	// For bidirectional streaming, we need to handle single messages
-	// If query has only one message, try to rank it against any stub item
-	if effectiveQueryLength == 1 && len(stubStream) > 1 {
-		queryItem := queryStream[0]
-
-		var bestRank float64
-		// Try to rank against any stub item
-		for _, stubItem := range stubStream {
-			// Check if this stub item has any matchers defined
-			hasMatchers := len(stubItem.Equals) > 0 || len(stubItem.Contains) > 0 || len(stubItem.Matches) > 0
-			if !hasMatchers {
-				continue
-			}
-
-			// Use the same logic as before for element rank
-			equalsRank := 0.0
-
-			if len(stubItem.Equals) > 0 && equals(stubItem.Equals, queryItem, stubItem.IgnoreArrayOrder) {
-				equalsRank = 1.0
-			}
-
-			containsRank := deeply.RankMatch(stubItem.Contains, queryItem)
-			matchesRank := deeply.RankMatch(stubItem.Matches, queryItem)
-			elementRank := equalsRank*100.0 + containsRank*0.1 + matchesRank*0.1 //nolint:mnd
-
-			if elementRank > bestRank {
-				bestRank = elementRank
-			}
-		}
-
-		// Give bonus for bidirectional streaming match
-		bidirectionalBonus := 500.0
-		finalRank := bestRank + bidirectionalBonus
-
-		return finalRank
-	}
-
-	// For client streaming, if lengths don't match, return very low rank
+	// Enforce exact length match for client streaming
 	if effectiveQueryLength != len(stubStream) {
-		// For client streaming, length must match exactly
-		return 0.1 //nolint:mnd
+		return 0
 	}
 
 	// STRICT: If query stream is empty but stub expects data, no rank
