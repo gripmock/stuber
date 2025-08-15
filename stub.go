@@ -116,7 +116,7 @@ type Output struct {
 	Data    map[string]any    `json:"data,omitempty"`   // The data of the response.
 	Stream  []any             `json:"stream,omitempty"` // The stream data for server-side streaming.
 	// Each element represents a message to be sent.
-	Error string        `json:"error"`           // The error message of the response.
-	Code  *codes.Code   `json:"code,omitempty"`  // The status code of the response.
-	Delay time.Duration `json:"delay,omitempty"` // The delay of the response or error.
+	Error string         `json:"error"`           // The error message of the response.
+	Code  *codes.Code    `json:"code,omitempty"`  // The status code of the response.
+	Delay *time.Duration `json:"delay,omitempty"` // The delay of the response or error.
 }
