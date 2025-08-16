@@ -58,14 +58,13 @@ func TestInputHeader_Len_Empty(t *testing.T) {
 
 func TestOutput_Fields(t *testing.T) {
 	code := codes.OK
-	delay := time.Duration(100)
 	output := Output{
 		Headers: map[string]string{"header1": "value1"},
 		Data:    map[string]any{"data1": "value1"},
 		Stream:  []any{"message1", "message2", "message3"},
 		Error:   "test error",
 		Code:    &code,
-		Delay:   &delay,
+		Delay:   100,
 	}
 
 	require.Equal(t, map[string]string{"header1": "value1"}, output.Headers)
@@ -73,7 +72,7 @@ func TestOutput_Fields(t *testing.T) {
 	require.Equal(t, []any{"message1", "message2", "message3"}, output.Stream)
 	require.Equal(t, "test error", output.Error)
 	require.Equal(t, &code, output.Code)
-	require.Equal(t, 100, int(*output.Delay))
+	require.Equal(t, 100, int(output.Delay))
 }
 
 func TestOutput_Fields_EmptyStream(t *testing.T) {
@@ -92,10 +91,10 @@ func TestOutput_Fields_OptionalDelay(t *testing.T) {
 	output := Output{
 		Headers: map[string]string{"header1": "value1"},
 		Data:    map[string]any{"data1": "value1"},
-		// Delay field is not set (should be nil)
+		// Delay field is not set (should be zero value)
 	}
 
 	require.Equal(t, map[string]string{"header1": "value1"}, output.Headers)
 	require.Equal(t, map[string]any{"data1": "value1"}, output.Data)
-	require.Nil(t, output.Delay)
+	require.Equal(t, time.Duration(0), output.Delay)
 }
