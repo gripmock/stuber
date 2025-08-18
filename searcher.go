@@ -545,7 +545,25 @@ func sortStubsByID(stubs []*Stub) {
 // rankStub calculates the ranking score for a stub.
 func (br *BidiResult) rankStub(stub *Stub, query QueryV2) float64 {
 	// Use the existing V2 ranking logic
-	return rankMatchV2(query, stub)
+	// Rank headers first
+	headersRank := rankHeaders(query.Headers, stub.Headers)
+
+	// Rank the query's input data against the stub's input data
+	if len(query.Input) == 0 {
+		return headersRank
+	}
+
+	if len(stub.Inputs) == 0 && len(query.Input) == 1 {
+		// Unary case
+		return headersRank + rankInput(query.Input[0], stub.Input)
+	}
+
+	if len(stub.Inputs) > 0 {
+		// Streaming case
+		return headersRank + rankStreamElements(query.Input, stub.Inputs)
+	}
+
+	return headersRank
 }
 
 // upsert inserts the given stub values into the searcher. If a stub value
@@ -1097,6 +1115,11 @@ func (s *searcher) processStubsParallel(query QueryV2, stubs []*Stub) (*Result, 
 
 // fastMatchV2 is an ultra-optimized version of matchV2.
 func (s *searcher) fastMatchV2(query QueryV2, stub *Stub) bool {
+	// If stub has headers, query must also have headers
+	if stub.Headers.Len() > 0 && len(query.Headers) == 0 {
+		return false
+	}
+
 	if len(query.Headers) > 0 && !matchHeaders(query.Headers, stub.Headers) {
 		return false
 	}
@@ -1105,12 +1128,13 @@ func (s *searcher) fastMatchV2(query QueryV2, stub *Stub) bool {
 		return false
 	}
 
-	if len(stub.Inputs) == 0 && len(query.Input) == 1 {
-		return s.fastMatchInput(query.Input[0], stub.Input)
-	}
-
+	// Priority to Inputs (newer functionality) over Input (legacy)
 	if len(stub.Inputs) > 0 {
 		return s.fastMatchStream(query.Input, stub.Inputs)
+	}
+
+	if len(query.Input) == 1 {
+		return s.fastMatchInput(query.Input[0], stub.Input)
 	}
 
 	return false
@@ -1122,19 +1146,23 @@ func (s *searcher) fastRankV2(query QueryV2, stub *Stub) float64 {
 		return 0
 	}
 
+	// Include header rank so that stubs with matching headers get higher score within same priority
+	headersRank := rankHeaders(query.Headers, stub.Headers)
+
 	if len(query.Input) == 0 {
-		return 0
+		return headersRank
 	}
 
-	if len(stub.Inputs) == 0 && len(query.Input) == 1 {
-		return s.fastRankInput(query.Input[0], stub.Input)
-	}
-
+	// Priority to Inputs (newer functionality) over Input (legacy)
 	if len(stub.Inputs) > 0 {
-		return s.fastRankStream(query.Input, stub.Inputs)
+		return headersRank + s.fastRankStream(query.Input, stub.Inputs)
 	}
 
-	return 0
+	if len(query.Input) == 1 {
+		return headersRank + s.fastRankInput(query.Input[0], stub.Input)
+	}
+
+	return headersRank
 }
 
 // fastMatchInput is an ultra-optimized version of matchInput.
@@ -1281,20 +1309,25 @@ func (s *searcher) wrap(err error) error {
 
 // calcSpecificity calculates the specificity score for a stub against a query.
 // Higher specificity means more fields match between stub and query.
+// Headers are given higher weight to ensure stubs with headers are preferred.
 func (s *searcher) calcSpecificity(stub *Stub, query QueryV2) int {
+	// Specificity now reflects only input structure, header impact is accounted in rank via rankHeaders
+	specificity := 0
+
 	if len(query.Input) == 0 {
-		return 0
+		return specificity
 	}
 
-	if len(stub.Inputs) == 0 && len(query.Input) == 1 {
-		return s.calcSpecificityUnary(stub.Input, query.Input[0])
-	}
-
+	// Priority to Inputs (newer functionality) over Input (legacy)
 	if len(stub.Inputs) > 0 {
-		return s.calcSpecificityStream(stub.Inputs, query.Input)
+		return specificity + s.calcSpecificityStream(stub.Inputs, query.Input)
 	}
 
-	return 0
+	if len(query.Input) == 1 {
+		return specificity + s.calcSpecificityUnary(stub.Input, query.Input[0])
+	}
+
+	return specificity
 }
 
 // calcSpecificityUnary calculates specificity for unary case.

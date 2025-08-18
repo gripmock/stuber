@@ -274,23 +274,6 @@ func matches(expected map[string]any, actual any, _ bool) bool {
 	return deeply.MatchesIgnoreArrayOrder(expected, actual)
 }
 
-// rankMatchV2 ranks how well a given QueryV2 matches a given stub.
-// Optimized version with minimal allocations and checks.
-func rankMatchV2(query QueryV2, stub *Stub) float64 {
-	// Fast path: unary case (most common case)
-	if len(stub.Inputs) == 0 && len(query.Input) == 1 {
-		return rankHeaders(query.Headers, stub.Headers) + rankInput(query.Input[0], stub.Input)
-	}
-
-	// Stream case
-	if len(stub.Inputs) > 0 {
-		return rankHeaders(query.Headers, stub.Headers) + rankStreamElements(query.Input, stub.Inputs)
-	}
-
-	// Multiple stream items but no stream in stub - no rank
-	return rankHeaders(query.Headers, stub.Headers)
-}
-
 // matchStreamElements checks if the query stream matches the stub stream.
 //
 //nolint:cyclop

@@ -9,6 +9,7 @@ import (
 	"github.com/bavix/features"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
 
 	"github.com/gripmock/stuber"
 )
@@ -1375,4 +1376,104 @@ func TestStableSortingOptimized(t *testing.T) {
 			require.Equal(t, firstResult.ID, stubResult.ID, "Stable sorting failed")
 		}
 	}
+}
+
+func TestPriorityHeadersOverEquals(t *testing.T) {
+	// Clear all caches before test
+	stuber.ClearAllCaches()
+	s := stuber.NewBudgerigar(features.New())
+
+	// Create stubs
+	stub1, stub2 := createTestStubs()
+	s.PutMany(stub1, stub2)
+
+	// Test query with headers that should match stub2
+	query := stuber.QueryV2{
+		Service: "helloworld.Greeter",
+		Method:  "SayHello",
+		Headers: map[string]any{
+			"x-user":  "Ivan",
+			"x-token": "123",
+		},
+		Input: []map[string]any{
+			{"name": "Bob"},
+		},
+	}
+
+	result, err := s.FindByQueryV2(query)
+	require.NoError(t, err)
+	require.NotNil(t, result.Found())
+
+	// Should match stub2 (with headers) instead of stub1 (without headers)
+	foundStub := result.Found()
+	require.Equal(t, "You aren't Bob. You are Ivan.", foundStub.Output.Data["message"])
+	require.Equal(t, "Ivanov", foundStub.Output.Headers["x-last-name"])
+	require.Equal(t, "Ivan", foundStub.Output.Headers["x-first-name"])
+	require.Empty(t, foundStub.Output.Error)
+	require.Nil(t, foundStub.Output.Code)
+
+	// Test query without headers that should match stub1
+	queryWithoutHeaders := stuber.QueryV2{
+		Service: "helloworld.Greeter",
+		Method:  "SayHello",
+		Input: []map[string]any{
+			{"name": "Bob"},
+		},
+	}
+
+	result, err = s.FindByQueryV2(queryWithoutHeaders)
+	require.NoError(t, err)
+	require.NotNil(t, result.Found())
+
+	// Should match stub1 (without headers)
+	foundStub = result.Found()
+	require.Equal(t, "user not found", foundStub.Output.Error)
+	require.Equal(t, codes.NotFound, *foundStub.Output.Code)
+	require.Empty(t, foundStub.Output.Data)
+	require.Empty(t, foundStub.Output.Headers)
+}
+
+func createTestStubs() (*stuber.Stub, *stuber.Stub) {
+	// Create first stub: simple equals match without headers
+	stub1 := &stuber.Stub{
+		Service: "helloworld.Greeter",
+		Method:  "SayHello",
+		Input: stuber.InputData{
+			Equals: map[string]any{"name": "Bob"},
+		},
+		Output: stuber.Output{
+			Error: "user not found",
+			Code: func() *codes.Code {
+				code := codes.NotFound
+
+				return &code
+			}(),
+		},
+	}
+
+	// Create second stub: equals match with headers (should have higher priority)
+	stub2 := &stuber.Stub{
+		Service: "helloworld.Greeter",
+		Method:  "SayHello",
+		Headers: stuber.InputHeader{
+			Contains: map[string]any{
+				"x-user":  "Ivan",
+				"x-token": "123",
+			},
+		},
+		Input: stuber.InputData{
+			Equals: map[string]any{"name": "Bob"},
+		},
+		Output: stuber.Output{
+			Headers: map[string]string{
+				"x-last-name":  "Ivanov",
+				"x-first-name": "Ivan",
+			},
+			Data: map[string]any{
+				"message": "You aren't Bob. You are Ivan.",
+			},
+		},
+	}
+
+	return stub1, stub2
 }
