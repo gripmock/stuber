@@ -548,19 +548,21 @@ func (br *BidiResult) rankStub(stub *Stub, query QueryV2) float64 {
 	// Rank headers first
 	headersRank := rankHeaders(query.Headers, stub.Headers)
 
-	// Rank the query's input data against the stub's input data
-	if len(query.Input) == 0 {
-		return headersRank
-	}
-
-	if len(stub.Inputs) == 0 && len(query.Input) == 1 {
-		// Unary case
-		return headersRank + rankInput(query.Input[0], stub.Input)
-	}
-
+	// Priority to Inputs (newer functionality) over Input (legacy)
 	if len(stub.Inputs) > 0 {
 		// Streaming case
 		return headersRank + rankStreamElements(query.Input, stub.Inputs)
+	}
+
+	// Handle Input (legacy) - check if query has input data
+	if len(query.Input) == 0 {
+		// Empty query - return header rank only
+		return headersRank
+	}
+
+	if len(query.Input) == 1 {
+		// Unary case
+		return headersRank + rankInput(query.Input[0], stub.Input)
 	}
 
 	return headersRank
@@ -1124,13 +1126,16 @@ func (s *searcher) fastMatchV2(query QueryV2, stub *Stub) bool {
 		return false
 	}
 
-	if len(query.Input) == 0 {
-		return false
-	}
-
 	// Priority to Inputs (newer functionality) over Input (legacy)
+	// Since Inputs and Input are mutually exclusive, we check Inputs first
 	if len(stub.Inputs) > 0 {
 		return s.fastMatchStream(query.Input, stub.Inputs)
+	}
+
+	// Handle Input (legacy) - since Inputs is empty, Input must be present
+	if len(query.Input) == 0 {
+		// Empty query - check if stub can handle empty input
+		return len(stub.Input.Equals) == 0 && len(stub.Input.Contains) == 0 && len(stub.Input.Matches) == 0
 	}
 
 	if len(query.Input) == 1 {
@@ -1149,13 +1154,19 @@ func (s *searcher) fastRankV2(query QueryV2, stub *Stub) float64 {
 	// Include header rank so that stubs with matching headers get higher score within same priority
 	headersRank := rankHeaders(query.Headers, stub.Headers)
 
-	if len(query.Input) == 0 {
-		return headersRank
+	// Priority to Inputs (newer functionality) over Input (legacy)
+	// Since Inputs and Input are mutually exclusive, we check Inputs first
+	if len(stub.Inputs) > 0 {
+		// Add bonus for using Inputs (newer functionality)
+		inputsBonus := 1000.0
+
+		return headersRank + s.fastRankStream(query.Input, stub.Inputs) + inputsBonus
 	}
 
-	// Priority to Inputs (newer functionality) over Input (legacy)
-	if len(stub.Inputs) > 0 {
-		return headersRank + s.fastRankStream(query.Input, stub.Inputs)
+	// Handle Input (legacy) - since Inputs is empty, Input must be present
+	if len(query.Input) == 0 {
+		// Empty query - return header rank only
+		return headersRank
 	}
 
 	if len(query.Input) == 1 {
@@ -1195,6 +1206,18 @@ func (s *searcher) fastMatchInput(queryData map[string]any, stubInput InputData)
 
 // fastMatchStream is an ultra-optimized version of matchStreamElements.
 func (s *searcher) fastMatchStream(queryStream []map[string]any, stubStream []InputData) bool {
+	// Fast path: empty query stream
+	if len(queryStream) == 0 {
+		// Check if all stub stream elements can handle empty input
+		for _, stubElement := range stubStream {
+			if len(stubElement.Equals) > 0 || len(stubElement.Contains) > 0 || len(stubElement.Matches) > 0 {
+				return false
+			}
+		}
+
+		return true
+	}
+
 	// Fast path: single element
 	if len(queryStream) == 1 && len(stubStream) == 1 {
 		return s.fastMatchInput(queryStream[0], stubStream[0])
@@ -1208,6 +1231,11 @@ func (s *searcher) fastMatchStream(queryStream []map[string]any, stubStream []In
 func (s *searcher) fastRankInput(queryData map[string]any, stubInput InputData) float64 {
 	// Fast path: empty query
 	if len(queryData) == 0 {
+		// Check if stub can handle empty input
+		if len(stubInput.Equals) == 0 && len(stubInput.Contains) == 0 && len(stubInput.Matches) == 0 {
+			return 1.0 // Perfect match for empty input
+		}
+
 		return 0
 	}
 
@@ -1226,6 +1254,18 @@ func (s *searcher) fastRankInput(queryData map[string]any, stubInput InputData) 
 
 // fastRankStream is an ultra-optimized version of rankStreamElements.
 func (s *searcher) fastRankStream(queryStream []map[string]any, stubStream []InputData) float64 {
+	// Fast path: empty query stream
+	if len(queryStream) == 0 {
+		// Check if all stub stream elements can handle empty input
+		for _, stubElement := range stubStream {
+			if len(stubElement.Equals) > 0 || len(stubElement.Contains) > 0 || len(stubElement.Matches) > 0 {
+				return 0
+			}
+		}
+
+		return 1.0 // Perfect match for empty input
+	}
+
 	// Fast path: single element
 	if len(queryStream) == 1 && len(stubStream) == 1 {
 		return s.fastRankInput(queryStream[0], stubStream[0])

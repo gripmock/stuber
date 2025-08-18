@@ -1477,3 +1477,519 @@ func createTestStubs() (*stuber.Stub, *stuber.Stub) {
 
 	return stub1, stub2
 }
+
+func TestEmptyQueryInput(t *testing.T) {
+	// Clear all caches before test
+	stuber.ClearAllCaches()
+	s := stuber.NewBudgerigar(features.New())
+
+	// Test case 1: Stub with Inputs (streaming) that can handle empty query
+	stub1 := &stuber.Stub{
+		Service: "helloworld.Greeter",
+		Method:  "SayHello",
+		Inputs: []stuber.InputData{
+			{
+				Equals: map[string]any{},
+			},
+		},
+		Output: stuber.Output{
+			Data: map[string]any{"message": "Streaming Empty"},
+		},
+	}
+
+	// Test case 2: Stub with Input (legacy) that can handle empty query
+	stub2 := &stuber.Stub{
+		Service: "helloworld.Greeter",
+		Method:  "SayHello",
+		Input: stuber.InputData{
+			Equals: map[string]any{},
+		},
+		Output: stuber.Output{
+			Data: map[string]any{"message": "Hello World"},
+		},
+	}
+
+	// Test case 3: Stub with Input (legacy) that cannot handle empty query
+	stub3 := &stuber.Stub{
+		Service: "helloworld.Greeter",
+		Method:  "SayHello",
+		Input: stuber.InputData{
+			Equals: map[string]any{"name": "Bob"},
+		},
+		Output: stuber.Output{
+			Data: map[string]any{"message": "Hello Bob"},
+		},
+	}
+
+	s.PutMany(stub1, stub2, stub3)
+
+	// Test empty query - should match stub2 (can handle empty input)
+	query := stuber.QueryV2{
+		Service: "helloworld.Greeter",
+		Method:  "SayHello",
+		Input:   []map[string]any{},
+	}
+
+	result, err := s.FindByQueryV2(query)
+	require.NoError(t, err)
+	require.NotNil(t, result.Found())
+
+	foundStub := result.Found()
+	require.Equal(t, "Streaming Empty", foundStub.Output.Data["message"])
+}
+
+func TestEmptyQueryInputWithStreaming(t *testing.T) {
+	// Clear all caches before test
+	stuber.ClearAllCaches()
+	s := stuber.NewBudgerigar(features.New())
+
+	// Stub with Inputs (streaming) that can handle empty query
+	stub1 := &stuber.Stub{
+		Service: "helloworld.Greeter",
+		Method:  "SayHello",
+		Inputs: []stuber.InputData{
+			{
+				Equals: map[string]any{},
+			},
+		},
+		Output: stuber.Output{
+			Data: map[string]any{"message": "Streaming Hello"},
+		},
+	}
+
+	// Stub with Input (legacy) that can handle empty query
+	stub2 := &stuber.Stub{
+		Service: "helloworld.Greeter",
+		Method:  "SayHello",
+		Input: stuber.InputData{
+			Equals: map[string]any{},
+		},
+		Output: stuber.Output{
+			Data: map[string]any{"message": "Legacy Hello"},
+		},
+	}
+
+	s.PutMany(stub1, stub2)
+
+	// Test empty query - should prioritize Inputs over Input
+	query := stuber.QueryV2{
+		Service: "helloworld.Greeter",
+		Method:  "SayHello",
+		Input:   []map[string]any{},
+	}
+
+	result, err := s.FindByQueryV2(query)
+	require.NoError(t, err)
+	require.NotNil(t, result.Found())
+
+	foundStub := result.Found()
+	require.Equal(t, "Streaming Hello", foundStub.Output.Data["message"])
+}
+
+func TestEmptyQueryInputNoMatch(t *testing.T) {
+	// Clear all caches before test
+	stuber.ClearAllCaches()
+	s := stuber.NewBudgerigar(features.New())
+
+	// Stub with Inputs (streaming) that cannot handle empty query
+	stub1 := &stuber.Stub{
+		Service: "helloworld.Greeter",
+		Method:  "SayHello",
+		Inputs: []stuber.InputData{
+			{
+				Equals: map[string]any{"name": "Bob"},
+			},
+		},
+		Output: stuber.Output{
+			Data: map[string]any{"message": "Hello Bob"},
+		},
+	}
+
+	// Stub with Input (legacy) that cannot handle empty query
+	stub2 := &stuber.Stub{
+		Service: "helloworld.Greeter",
+		Method:  "SayHello",
+		Input: stuber.InputData{
+			Equals: map[string]any{"name": "Bob"},
+		},
+		Output: stuber.Output{
+			Data: map[string]any{"message": "Hello Bob"},
+		},
+	}
+
+	s.PutMany(stub1, stub2)
+
+	// Test empty query - should not match any stub
+	query := stuber.QueryV2{
+		Service: "helloworld.Greeter",
+		Method:  "SayHello",
+		Input:   []map[string]any{},
+	}
+
+	result, err := s.FindByQueryV2(query)
+	require.NoError(t, err)
+	require.Nil(t, result.Found())
+	require.NotNil(t, result.Similar()) // Should find similar match
+}
+
+func TestEmptyQueryInputWithHeaders(t *testing.T) {
+	// Clear all caches before test
+	stuber.ClearAllCaches()
+	s := stuber.NewBudgerigar(features.New())
+
+	// Stub with Inputs (streaming) that can handle empty query and has headers
+	stub1 := &stuber.Stub{
+		Service: "helloworld.Greeter",
+		Method:  "SayHello",
+		Headers: stuber.InputHeader{
+			Contains: map[string]any{
+				"x-user": "admin",
+			},
+		},
+		Inputs: []stuber.InputData{
+			{
+				Equals: map[string]any{},
+			},
+		},
+		Output: stuber.Output{
+			Data: map[string]any{"message": "Admin Hello"},
+		},
+	}
+
+	// Stub with Input (legacy) that can handle empty query and has headers
+	stub2 := &stuber.Stub{
+		Service: "helloworld.Greeter",
+		Method:  "SayHello",
+		Headers: stuber.InputHeader{
+			Contains: map[string]any{
+				"x-user": "admin",
+			},
+		},
+		Input: stuber.InputData{
+			Equals: map[string]any{},
+		},
+		Output: stuber.Output{
+			Data: map[string]any{"message": "Admin Legacy Hello"},
+		},
+	}
+
+	s.PutMany(stub1, stub2)
+
+	// Test empty query with headers - should prioritize Inputs over Input
+	query := stuber.QueryV2{
+		Service: "helloworld.Greeter",
+		Method:  "SayHello",
+		Headers: map[string]any{
+			"x-user": "admin",
+		},
+		Input: []map[string]any{},
+	}
+
+	result, err := s.FindByQueryV2(query)
+	require.NoError(t, err)
+	require.NotNil(t, result.Found())
+
+	foundStub := result.Found()
+	require.Equal(t, "Admin Hello", foundStub.Output.Data["message"])
+}
+
+func TestEmptyQueryInputMixedConditions(t *testing.T) {
+	// Clear all caches before test
+	stuber.ClearAllCaches()
+	s := stuber.NewBudgerigar(features.New())
+
+	// Stub with Inputs (streaming) that can handle empty query
+	stub1 := &stuber.Stub{
+		Service: "helloworld.Greeter",
+		Method:  "SayHello",
+		Inputs: []stuber.InputData{
+			{
+				Equals: map[string]any{},
+			},
+		},
+		Output: stuber.Output{
+			Data: map[string]any{"message": "Streaming Empty"},
+		},
+	}
+
+	// Stub with Inputs (streaming) that cannot handle empty query
+	stub2 := &stuber.Stub{
+		Service: "helloworld.Greeter",
+		Method:  "SayHello",
+		Inputs: []stuber.InputData{
+			{
+				Equals: map[string]any{"name": "Bob"},
+			},
+		},
+		Output: stuber.Output{
+			Data: map[string]any{"message": "Streaming Bob"},
+		},
+	}
+
+	// Stub with Input (legacy) that can handle empty query
+	stub3 := &stuber.Stub{
+		Service: "helloworld.Greeter",
+		Method:  "SayHello",
+		Input: stuber.InputData{
+			Equals: map[string]any{},
+		},
+		Output: stuber.Output{
+			Data: map[string]any{"message": "Legacy Empty"},
+		},
+	}
+
+	s.PutMany(stub1, stub2, stub3)
+
+	// Test empty query - should match stub1 (Inputs with empty equals)
+	query := stuber.QueryV2{
+		Service: "helloworld.Greeter",
+		Method:  "SayHello",
+		Input:   []map[string]any{},
+	}
+
+	result, err := s.FindByQueryV2(query)
+	require.NoError(t, err)
+	require.NotNil(t, result.Found())
+
+	foundStub := result.Found()
+	require.Equal(t, "Streaming Empty", foundStub.Output.Data["message"])
+}
+
+// TestMethodTypes tests logic for all method types.
+//
+//nolint:funlen
+func TestMethodTypes(t *testing.T) {
+	// Clear all caches before test
+	stuber.ClearAllCaches()
+	s := stuber.NewBudgerigar(features.New())
+
+	// Test case 1: Unary method (Input only)
+	unaryStub := &stuber.Stub{
+		Service: "helloworld.Greeter",
+		Method:  "SayHello",
+		Input: stuber.InputData{
+			Equals: map[string]any{"name": "Bob"},
+		},
+		Output: stuber.Output{
+			Data: map[string]any{"message": "Hello Bob"},
+		},
+	}
+
+	// Test case 2: Client streaming method (Inputs only)
+	clientStreamStub := &stuber.Stub{
+		Service: "helloworld.Greeter",
+		Method:  "SayHelloStream",
+		Inputs: []stuber.InputData{
+			{
+				Equals: map[string]any{"name": "Alice"},
+			},
+			{
+				Equals: map[string]any{"name": "Bob"},
+			},
+		},
+		Output: stuber.Output{
+			Data: map[string]any{"message": "Hello Stream"},
+		},
+	}
+
+	// Test case 3: Server streaming method (Input + Output.Stream)
+	serverStreamStub := &stuber.Stub{
+		Service: "helloworld.Greeter",
+		Method:  "SayHelloServerStream",
+		Input: stuber.InputData{
+			Equals: map[string]any{"name": "Charlie"},
+		},
+		Output: stuber.Output{
+			Stream: []any{
+				map[string]any{"message": "Hello Charlie 1"},
+				map[string]any{"message": "Hello Charlie 2"},
+			},
+		},
+	}
+
+	// Test case 4: Bidirectional streaming method (Inputs + Output.Stream)
+	bidiStreamStub := &stuber.Stub{
+		Service: "helloworld.Greeter",
+		Method:  "SayHelloBidi",
+		Inputs: []stuber.InputData{
+			{
+				Equals: map[string]any{"name": "David"},
+			},
+		},
+		Output: stuber.Output{
+			Stream: []any{
+				map[string]any{"message": "Hello David"},
+			},
+		},
+	}
+
+	s.PutMany(unaryStub, clientStreamStub, serverStreamStub, bidiStreamStub)
+
+	// Test 1: Unary method
+	t.Run("Unary", func(t *testing.T) {
+		query := stuber.QueryV2{
+			Service: "helloworld.Greeter",
+			Method:  "SayHello",
+			Input:   []map[string]any{{"name": "Bob"}},
+		}
+
+		result, err := s.FindByQueryV2(query)
+		require.NoError(t, err)
+		require.NotNil(t, result.Found())
+		require.Equal(t, "Hello Bob", result.Found().Output.Data["message"])
+	})
+
+	// Test 2: Client streaming method
+	t.Run("ClientStream", func(t *testing.T) {
+		query := stuber.QueryV2{
+			Service: "helloworld.Greeter",
+			Method:  "SayHelloStream",
+			Input: []map[string]any{
+				{"name": "Alice"},
+				{"name": "Bob"},
+			},
+		}
+
+		result, err := s.FindByQueryV2(query)
+		require.NoError(t, err)
+		require.NotNil(t, result.Found())
+		require.Equal(t, "Hello Stream", result.Found().Output.Data["message"])
+	})
+
+	// Test 3: Server streaming method
+	t.Run("ServerStream", func(t *testing.T) {
+		query := stuber.QueryV2{
+			Service: "helloworld.Greeter",
+			Method:  "SayHelloServerStream",
+			Input:   []map[string]any{{"name": "Charlie"}},
+		}
+
+		result, err := s.FindByQueryV2(query)
+		require.NoError(t, err)
+		require.NotNil(t, result.Found())
+		require.Len(t, result.Found().Output.Stream, 2)
+	})
+
+	// Test 4: Bidirectional streaming method
+	t.Run("Bidirectional", func(t *testing.T) {
+		query := stuber.QueryV2{
+			Service: "helloworld.Greeter",
+			Method:  "SayHelloBidi",
+			Input:   []map[string]any{{"name": "David"}},
+		}
+
+		result, err := s.FindByQueryV2(query)
+		require.NoError(t, err)
+		require.NotNil(t, result.Found())
+		require.Len(t, result.Found().Output.Stream, 1)
+	})
+}
+
+// TestMethodTypesPriority проверяет приоритизацию между разными типами методов.
+func TestMethodTypesPriority(t *testing.T) {
+	// Clear all caches before test
+	stuber.ClearAllCaches()
+	s := stuber.NewBudgerigar(features.New())
+
+	// Test case: Same service/method with different types
+	// 1. Unary stub (legacy)
+	unaryStub := &stuber.Stub{
+		Service: "helloworld.Greeter",
+		Method:  "SayHello",
+		Input: stuber.InputData{
+			Equals: map[string]any{"name": "Bob"},
+		},
+		Output: stuber.Output{
+			Data: map[string]any{"message": "Hello Bob (Unary)"},
+		},
+	}
+
+	// 2. Client streaming stub (newer)
+	clientStreamStub := &stuber.Stub{
+		Service: "helloworld.Greeter",
+		Method:  "SayHello",
+		Inputs: []stuber.InputData{
+			{
+				Equals: map[string]any{"name": "Bob"},
+			},
+		},
+		Output: stuber.Output{
+			Data: map[string]any{"message": "Hello Bob (ClientStream)"},
+		},
+	}
+
+	s.PutMany(unaryStub, clientStreamStub)
+
+	// Test: Should prioritize Inputs (newer) over Input (legacy)
+	query := stuber.QueryV2{
+		Service: "helloworld.Greeter",
+		Method:  "SayHello",
+		Input:   []map[string]any{{"name": "Bob"}},
+	}
+
+	result, err := s.FindByQueryV2(query)
+	require.NoError(t, err)
+	require.NotNil(t, result.Found())
+
+	foundStub := result.Found()
+	require.Equal(t, "Hello Bob (ClientStream)", foundStub.Output.Data["message"])
+}
+
+// TestMethodTypesEmptyInput проверяет обработку пустых запросов для всех типов методов.
+func TestMethodTypesEmptyInput(t *testing.T) {
+	// Clear all caches before test
+	stuber.ClearAllCaches()
+	s := stuber.NewBudgerigar(features.New())
+
+	// Test case 1: Client streaming method that can handle empty input (should be prioritized)
+	clientStreamEmptyStub := &stuber.Stub{
+		Service: "helloworld.Greeter",
+		Method:  "SayHello",
+		Inputs: []stuber.InputData{
+			{
+				Equals: map[string]any{},
+			},
+		},
+		Output: stuber.Output{
+			Data: map[string]any{"message": "Hello World (ClientStream)"},
+		},
+	}
+
+	// Test case 2: Unary method that can handle empty input (legacy, should not be prioritized)
+	unaryEmptyStub := &stuber.Stub{
+		Service: "helloworld.Greeter",
+		Method:  "SayHello",
+		Input: stuber.InputData{
+			Equals: map[string]any{},
+		},
+		Output: stuber.Output{
+			Data: map[string]any{"message": "Hello World (Unary)"},
+		},
+	}
+
+	// Test case 3: Unary method that cannot handle empty input
+	unaryNonEmptyStub := &stuber.Stub{
+		Service: "helloworld.Greeter",
+		Method:  "SayHello",
+		Input: stuber.InputData{
+			Equals: map[string]any{"name": "Bob"},
+		},
+		Output: stuber.Output{
+			Data: map[string]any{"message": "Hello Bob"},
+		},
+	}
+
+	s.PutMany(unaryEmptyStub, clientStreamEmptyStub, unaryNonEmptyStub)
+
+	// Test empty query - should prioritize Inputs (newer) over Input (legacy)
+	query := stuber.QueryV2{
+		Service: "helloworld.Greeter",
+		Method:  "SayHello",
+		Input:   []map[string]any{},
+	}
+
+	result, err := s.FindByQueryV2(query)
+	require.NoError(t, err)
+	require.NotNil(t, result.Found())
+	require.Equal(t, "Hello World (ClientStream)", result.Found().Output.Data["message"])
+}
