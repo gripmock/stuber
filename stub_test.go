@@ -1,12 +1,15 @@
 package stuber //nolint:testpackage
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
+
+	"github.com/gripmock/types"
 )
 
 func TestStub_Methods(t *testing.T) {
@@ -64,7 +67,7 @@ func TestOutput_Fields(t *testing.T) {
 		Stream:  []any{"message1", "message2", "message3"},
 		Error:   "test error",
 		Code:    &code,
-		Delay:   100,
+		Delay:   types.Duration(100),
 	}
 
 	require.Equal(t, map[string]string{"header1": "value1"}, output.Headers)
@@ -96,5 +99,26 @@ func TestOutput_Fields_OptionalDelay(t *testing.T) {
 
 	require.Equal(t, map[string]string{"header1": "value1"}, output.Headers)
 	require.Equal(t, map[string]any{"data1": "value1"}, output.Data)
-	require.Equal(t, time.Duration(0), output.Delay)
+	require.Equal(t, types.Duration(0), output.Delay)
+}
+
+func TestOutput_Delay_JSONSerialization(t *testing.T) {
+	// Test JSON serialization with delay
+	output := Output{
+		Headers: map[string]string{"content-type": "application/json"},
+		Data:    map[string]any{"message": "Hello World"},
+		Delay:   types.Duration(100 * time.Millisecond),
+	}
+
+	jsonData, err := json.Marshal(output)
+	require.NoError(t, err)
+	require.Contains(t, string(jsonData), `"delay":"100ms"`)
+
+	// Test JSON deserialization with delay
+	var decodedOutput Output
+
+	err = json.Unmarshal([]byte(`{"headers":{"content-type":"application/json"},"data":{"message":"Hello World"},"delay":"200ms"}`),
+		&decodedOutput)
+	require.NoError(t, err)
+	require.Equal(t, types.Duration(200*time.Millisecond), decodedOutput.Delay)
 }
