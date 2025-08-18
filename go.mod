@@ -6,6 +6,7 @@ require (
 	github.com/bavix/features v1.0.3
 	github.com/google/uuid v1.6.0
 	github.com/gripmock/deeply v1.3.3
+	github.com/gripmock/types v0.0.1
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/stretchr/testify v1.10.0
 	github.com/zeebo/xxh3 v1.0.2
