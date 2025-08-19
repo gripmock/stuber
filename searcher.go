@@ -1116,6 +1116,8 @@ func (s *searcher) processStubsParallel(query QueryV2, stubs []*Stub) (*Result, 
 }
 
 // fastMatchV2 is an ultra-optimized version of matchV2.
+//
+//nolint:cyclop
 func (s *searcher) fastMatchV2(query QueryV2, stub *Stub) bool {
 	// If stub has headers, query must also have headers
 	if stub.Headers.Len() > 0 && len(query.Headers) == 0 {
@@ -1212,17 +1214,22 @@ func (s *searcher) fastMatchInput(queryData map[string]any, stubInput InputData)
 }
 
 // fastMatchStream is an ultra-optimized version of matchStreamElements.
+//
+//nolint:cyclop
 func (s *searcher) fastMatchStream(queryStream []map[string]any, stubStream []InputData) bool {
 	// Check if stub has any input matching conditions
 	// Note: Empty maps (Equals: {}, Contains: {}, Matches: {}) are valid conditions
 	// that can handle empty queries
 	hasConditions := false
+
 	for _, stubElement := range stubStream {
 		if stubElement.Equals != nil || stubElement.Contains != nil || stubElement.Matches != nil {
 			hasConditions = true
+
 			break
 		}
 	}
+
 	if !hasConditions {
 		return false // Stub has no input matching conditions
 	}
