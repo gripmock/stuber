@@ -24,7 +24,7 @@ func TestMatchStreamV2(t *testing.T) {
 			name:       "empty streams",
 			queryInput: []map[string]any{},
 			stubStream: []stuber.InputData{},
-			expected:   false, // Empty streams should not match in V2
+			expected:   false, // Empty streams should not match - stub must have input conditions
 		},
 		{
 			name:       "single element match",
