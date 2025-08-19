@@ -1133,6 +1133,13 @@ func (s *searcher) fastMatchV2(query QueryV2, stub *Stub) bool {
 	}
 
 	// Handle Input (legacy) - since Inputs is empty, Input must be present
+	// Check if stub has any input matching conditions
+	// Note: Empty maps (Equals: {}, Contains: {}, Matches: {}) are valid conditions
+	// that can handle empty queries
+	if stub.Input.Equals == nil && stub.Input.Contains == nil && stub.Input.Matches == nil {
+		return false // Stub has no input matching conditions
+	}
+
 	if len(query.Input) == 0 {
 		// Empty query - check if stub can handle empty input
 		return len(stub.Input.Equals) == 0 && len(stub.Input.Contains) == 0 && len(stub.Input.Matches) == 0
@@ -1206,6 +1213,20 @@ func (s *searcher) fastMatchInput(queryData map[string]any, stubInput InputData)
 
 // fastMatchStream is an ultra-optimized version of matchStreamElements.
 func (s *searcher) fastMatchStream(queryStream []map[string]any, stubStream []InputData) bool {
+	// Check if stub has any input matching conditions
+	// Note: Empty maps (Equals: {}, Contains: {}, Matches: {}) are valid conditions
+	// that can handle empty queries
+	hasConditions := false
+	for _, stubElement := range stubStream {
+		if stubElement.Equals != nil || stubElement.Contains != nil || stubElement.Matches != nil {
+			hasConditions = true
+			break
+		}
+	}
+	if !hasConditions {
+		return false // Stub has no input matching conditions
+	}
+
 	// Fast path: empty query stream
 	if len(queryStream) == 0 {
 		// Check if all stub stream elements can handle empty input
