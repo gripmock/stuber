@@ -1,6 +1,6 @@
 module github.com/gripmock/stuber
 
-go 1.24
+go 1.24.0
 
 require (
 	github.com/bavix/features v1.0.3
@@ -11,7 +11,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/zeebo/xxh3 v1.0.2
 	golang.org/x/text v0.28.0
-	google.golang.org/grpc v1.75.0
+	google.golang.org/grpc v1.76.0
 )
 
 require (
